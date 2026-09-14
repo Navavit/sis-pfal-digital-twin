@@ -20,6 +20,19 @@ import streamlit as st
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
+# Streamlit only hot-reloads modules inside the script folder or on PYTHONPATH. On Streamlit Cloud a new commit
+# re-runs this file but would keep the old `pfal_twin` in memory -> make the package watchable and, if a stale copy
+# is already loaded (version mismatch), drop it and re-import.
+import os  # noqa: E402
+os.environ["PYTHONPATH"] = str(ROOT) + os.pathsep + os.environ.get("PYTHONPATH", "")
+NEEDS_PKG = "2026.09.14.3"
+import pfal_twin  # noqa: E402
+if getattr(pfal_twin, "__version__", "") != NEEDS_PKG:
+    for _m in [m for m in sys.modules if m == "pfal_twin" or m.startswith("pfal_twin.")]:
+        del sys.modules[_m]
+    st_cache_clear = True
+else:
+    st_cache_clear = False
 from pfal_twin.twin import DigitalTwin  # noqa: E402
 from pfal_twin import thingsboard as tb, models as M  # noqa: E402
 
@@ -41,6 +54,10 @@ PLOTLY = dict(use_container_width=True, config=dict(displaylogo=False, modeBarBu
 
 
 # ---------------------------------------------------------------------------- cached resources
+if st_cache_clear:
+    st.cache_resource.clear(); st.cache_data.clear()
+
+
 @st.cache_resource(show_spinner="loading digital twin ...")
 def get_twin() -> DigitalTwin:
     return DigitalTwin.load()
