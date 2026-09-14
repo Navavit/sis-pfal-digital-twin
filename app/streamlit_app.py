@@ -25,7 +25,7 @@ sys.path.insert(0, str(ROOT))
 # is already loaded (version mismatch), drop it and re-import.
 import os  # noqa: E402
 os.environ["PYTHONPATH"] = str(ROOT) + os.pathsep + os.environ.get("PYTHONPATH", "")
-NEEDS_PKG = "2026.09.14.5"
+NEEDS_PKG = "2026.09.14.6"
 import pfal_twin  # noqa: E402
 if getattr(pfal_twin, "__version__", "") != NEEDS_PKG:
     for _m in [m for m in sys.modules if m == "pfal_twin" or m.startswith("pfal_twin.")]:
@@ -88,8 +88,11 @@ def ts_chart(df, cols, title, unit="", height=280, setpoints=None, step=False):
     for k, lab in (setpoints or {}).items():
         if k in df.columns and df[k].dropna().size:
             fig.add_scatter(x=df.index, y=df[k].ffill().values, mode="lines", name=lab, line=dict(dash="dash", color="grey"), line_shape="hv")
-    fig.update_layout(title=title, height=height, margin=dict(l=40, r=10, t=40, b=30), yaxis_title=unit, hovermode="x unified",
-                      legend=dict(orientation="h", y=-0.25, font=dict(size=10)))
+    # title on top, legend directly under it (above the plot) -> never collides with the x-axis date labels
+    n = len(fig.data); rows = 1 if n <= 3 else 2 if n <= 6 else 3
+    fig.update_layout(title=dict(text=title, y=0.99, yanchor="top", x=0, xanchor="left", font=dict(size=14)), height=height,
+                      margin=dict(l=45, r=10, t=36 + 22 * rows, b=35), yaxis_title=unit, hovermode="x unified",
+                      legend=dict(orientation="h", yanchor="bottom", y=1.0, x=0, xanchor="left", font=dict(size=10), itemwidth=30))
     return fig
 
 
@@ -102,9 +105,9 @@ def dose_chart(df, dev, height=220):
         if col in df.columns and df[col].dropna().size:
             d = df[col].dropna()
             fig.add_scatter(x=d.index, y=base + 0.8 * d.values, mode="lines", name=lab, line_shape="hv")
-    fig.update_layout(title=f"Dose stage — {dev} ({'growing 200 L' if dev == 'gc1' else 'nursery-2 100 L'})", height=height,
-                      margin=dict(l=40, r=10, t=40, b=30), yaxis=dict(tickvals=[0, 1, 2], ticktext=["acid", "B", "A"], range=[-0.2, 3]),
-                      hovermode="x unified", legend=dict(orientation="h", y=-0.35, font=dict(size=10)))
+    fig.update_layout(title=dict(text=f"Dose stage — {dev} ({'growing 200 L' if dev == 'gc1' else 'nursery-2 100 L'})", y=0.99, yanchor="top", x=0, xanchor="left", font=dict(size=14)),
+                      height=height, margin=dict(l=45, r=10, t=58, b=35), yaxis=dict(tickvals=[0, 1, 2], ticktext=["acid", "B", "A"], range=[-0.2, 3]),
+                      hovermode="x unified", legend=dict(orientation="h", yanchor="bottom", y=1.0, x=0, xanchor="left", font=dict(size=10)))
     return fig
 
 

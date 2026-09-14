@@ -291,7 +291,8 @@ class DigitalTwin:
         others = self.sensors[~self.sensors.key_prefix.isin(tb.CHANNELS.keys())]
         tr = viz.model_traces(self.model, tier_color="#cccccc", group_legend=compact) + viz.zone_traces(self._rack_box, zv, cmin=cmin, cmax=cmax, unit=unit, opacity=0.55)
         tr += viz.equipment_traces(self.equipment_inside, opacity=0.2, group_legend=compact)
-        tr += [viz.sensor_trace(others, text=[f"{r.sensor} ({r.placed_on})" for r in others.itertuples()], name="other IoT boxes", size=5), self._unit_trace(st, var, cmin, cmax)]
+        tr += [viz.sensor_trace(others, text=[f"{r.sensor} ({r.placed_on})" for r in others.itertuples()], name="other IoT boxes (hover)", size=5, labels=not compact),
+               self._unit_trace(st, var, cmin, cmax)]
         on = [lp for lp, v in st.pump_on.items() if v]
         if pipes:
             tr += H.pipe_traces(self.network, loops=on + ["shared", "n1"]) + H.pipe_traces(self.network, loops=[lp for lp in ("gc1", "gc2") if lp not in on], opacity=0.2)
