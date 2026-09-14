@@ -153,6 +153,30 @@ class DigitalTwin:
         table = long.set_index("column")[["value", "ts", "age", "device", "key"]].sort_values("ts", ascending=False)
         return st, table
 
+    def recent(self, hours=24, interval_min=5, keys=None):
+        """Straight from ThingsBoard like the dashboard's real-time window: last `hours` hours, `interval_min`-minute averages
+        for measurements and raw on/off events for the dosing pumps -> wide frame ("alias.key" columns)."""
+        client = tb.Client().login_public()
+        end = pd.Timestamp.now(tz=tb.TZ); start = end - pd.Timedelta(hours=hours)
+        keys = keys or tb.DASHBOARD_COLUMNS + ["gc1.led", "gc1.pwmWater", "gc2.pwmWater", "co2.Relay_co2", "co2.temperature", "co2.humidity"]
+        by_dev = {}
+        for col in keys:
+            a, k = col.split(".", 1); by_dev.setdefault(a, []).append(k)
+        frames = []
+        for a, ks in by_dev.items():
+            avg = [k for k in ks if k not in tb.CONTROL_KEYS]; raw = [k for k in ks if k in tb.CONTROL_KEYS]
+            try:
+                if avg:
+                    df = client.timeseries(tb.DEVICES[a]["id"], avg, start, end, interval_ms=interval_min * 60000, agg="AVG"); df["device"] = a; frames.append(df)
+                if raw:
+                    df = client.timeseries(tb.DEVICES[a]["id"], raw, start, end); df["device"] = a; frames.append(df)
+            except Exception as e:
+                print(f"recent: {a} -> {e}")
+        if not frames:
+            return pd.DataFrame()
+        long = pd.concat(frames, ignore_index=True); long["col"] = long["device"] + "." + long["key"]
+        return long.pivot_table(index="ts", columns="col", values="value", aggfunc="last").sort_index()
+
     def history(self, start=None, end=None, columns=None, freq=None):
         """Slice of the local 10-min table (columns like "gw.xy_md_21_t", "gc1.ec"); freq="1h" etc. resamples by mean.
         Call update_data() first if you need data newer than data.index.max()."""
