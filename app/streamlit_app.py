@@ -46,6 +46,9 @@ st.markdown(f"""<style>
 @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&display=swap');
 html, body, .stApp, .stApp * {{ font-family: '{FONT}', sans-serif !important; }}
 code, pre, .stCode *, [data-testid="stCode"] * {{ font-family: 'IBM Plex Mono', ui-monospace, monospace !important; }}
+/* Streamlit's icons are ligatures of an icon font -- keep that font, otherwise they render as text ("keyboard_arrow_right") */
+.stApp [data-testid="stIconMaterial"], .stApp [data-testid="stExpanderToggleIcon"], .stApp [class*="material-symbols"],
+.stApp span[translate="no"] {{ font-family: 'Material Symbols Rounded' !important; }}
 </style>""", unsafe_allow_html=True)
 import plotly.io as pio
 pio.templates["sis"] = pio.templates["plotly_white"]; pio.templates["sis"].layout.font.family = f"{FONT}, sans-serif"; pio.templates.default = "sis"
