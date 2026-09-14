@@ -74,23 +74,29 @@ def box_wire(x0, x1, y0, y1, z0, z1, color="#333", width=3, name="room"):
     return go.Scatter3d(x=xs, y=ys, z=zs, mode="lines", line=dict(color=color, width=width), name=name)
 
 
-def model_traces(model, tier_thickness=0.03, tier_color="#2a7d2a", frame_color="#555"):
-    """Room wireframe + one slab per rack tier + rack frame posts."""
+def model_traces(model, tier_thickness=0.03, tier_color="#2a7d2a", frame_color="#555", group_legend=False):
+    """Room wireframe + one slab per rack tier + rack frame posts. group_legend=True -> the tiers share one legend entry."""
     R, K = model["room"], model["rack"]
     tr = [box_wire(0, R["L"], 0, R["W"], 0, R["H"], name=f"room {R['L']:.2f}×{R['W']:.2f}×{R['H']:.2f} m")]
     for t in K["tiers"]:
         tr.append(box_mesh(K["x0"], K["x1"], K["y0"], K["y1"], t["z"] - tier_thickness, t["z"],
                            color=tier_color, opacity=0.35, name=f"tier {t['index']} {'growing' if t['index'] >= 2 else 'nursery'} (z={t['z']:.2f} m)"))
+        if group_legend:
+            tr[-1].update(legendgroup="tiers", name=f"rack tiers 1-{len(K['tiers'])}", showlegend=t["index"] == 1)
     top = K.get("top_frame_z", R["H"])
     tr.append(box_wire(K["x0"], K["x1"], K["y0"], K["y1"], 0, top, color=frame_color, width=2, name="rack frame"))
     return tr
 
 
-def figure_3d(traces, title=None, height=800):
+def figure_3d(traces, title=None, height=800, compact=False):
+    """compact=True: small horizontal legend under the scene (for the web app) instead of the tall list on the right."""
     fig = go.Figure(data=traces)
     fig.update_layout(title=title, height=height, margin=dict(l=0, r=0, t=40, b=0),
                       scene=dict(aspectmode="data", xaxis_title="X (m)", yaxis_title="Y (m)", zaxis_title="Z (m)"),
                       legend=dict(itemsizing="constant"))
+    if compact:
+        fig.update_layout(legend=dict(orientation="h", yanchor="top", y=-0.01, xanchor="left", x=0, font=dict(size=10), itemwidth=30),
+                          title=dict(font=dict(size=13)), margin=dict(l=0, r=0, t=50, b=0))
     return fig
 
 
@@ -120,12 +126,20 @@ def zone_traces(zones, values=None, cmin=None, cmax=None, colorscale="RdYlBu_r",
     return tr
 
 
-def equipment_traces(eq, opacity=0.5):
-    tr = []
+EQUIP_GROUP_LABEL = {"hvac": "HVAC / fans", "nutrient": "nutrient system", "electrical": "electrical / control boxes", "structure": "structure",
+                     "furniture": "furniture", "co2": "CO2 system", "water": "water / tanks", "unknown": "other"}
+
+
+def equipment_traces(eq, opacity=0.5, group_legend=False):
+    """One box per equipment item. group_legend=True -> one legend entry per category (item names stay in the hover text)."""
+    tr, seen = [], set()
     for _, r in eq.iterrows():
         m = box_mesh(r.x0, r.x1, r.y0, r.y1, r.z0, r.z1, color=EQUIP_COLORS.get(r.category, "#888"), opacity=opacity,
                      name=f"{r['name']} [{r.confidence}]")
         m.update(hovertext=f"{r['name']}<br>{r.category} — confidence {r.confidence}<br>{r.evidence}", hoverinfo="text")
+        if group_legend:
+            m.update(legendgroup=r.category, name=EQUIP_GROUP_LABEL.get(r.category, r.category), showlegend=r.category not in seen)
+            seen.add(r.category)
         tr.append(m)
     return tr
 

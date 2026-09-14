@@ -40,4 +40,4 @@ def rack_3d_holes(assign, model, base_traces=None, title=None):
         tr.append(go.Scatter3d(x=g.x, y=g.y, z=g.z, mode="markers", name=f"{k} ({len(g)})",
                                marker=dict(size=4, color=CROPS[k]["color"], line=dict(color="#333", width=0.5)),
                                hovertext=[f"tier {r.tier} col {r.col} row {r.row}: {k}" for r in g.itertuples()], hoverinfo="text"))
-    return figure_3d(tr, title=title or "Crop mix on the growing tiers (one marker per hole)", height=720)
+    return figure_3d(tr, title=title or "Crop mix on the growing tiers (one marker per hole)", height=720, compact=True)
