@@ -25,8 +25,8 @@ sys.path.insert(0, str(ROOT))
 # is already loaded (version mismatch), drop it and re-import.
 import os  # noqa: E402
 os.environ["PYTHONPATH"] = str(ROOT) + os.pathsep + os.environ.get("PYTHONPATH", "")
-NEEDS_PKG = "2026.09.14.8"
-APP_BUILD = "2026-09-15 b"          # shown in the footer so everyone can tell which version is running
+NEEDS_PKG = "2026.09.15.1"
+APP_BUILD = "2026-09-15 c"          # shown in the footer so everyone can tell which version is running
 import pfal_twin  # noqa: E402
 if getattr(pfal_twin, "__version__", "") != NEEDS_PKG:
     for _m in [m for m in sys.modules if m == "pfal_twin" or m.startswith("pfal_twin.")]:
@@ -35,7 +35,7 @@ if getattr(pfal_twin, "__version__", "") != NEEDS_PKG:
 else:
     st_cache_clear = False
 from pfal_twin.twin import DigitalTwin  # noqa: E402
-from pfal_twin import thingsboard as tb, models as M  # noqa: E402
+from pfal_twin import thingsboard as tb, models as M, store  # noqa: E402
 
 ASSETS = Path(__file__).resolve().parent / "assets"
 PROJECT = dict(name="SIS PFAL Digital Twin", th="โรงประลอง · วิทยาลัยบูรณาการศาสตร์ มหาวิทยาลัยเกษตรศาสตร์",
@@ -62,22 +62,38 @@ if st_cache_clear:
     st.cache_resource.clear(); st.cache_data.clear()
 
 
+@st.cache_data(ttl=600, show_spinner=False)
+def store_version(_nonce: int = 0) -> str:
+    """Every 10 min: if the `data` branch on GitHub has a newer store than the local file, download it.
+    Returns the manifest timestamp that identifies the store version (keys the twin cache)."""
+    try:
+        r = store.sync_from_github()
+    except Exception as e:  # GitHub unreachable -> keep the local copy
+        r = dict(action=f"error: {e}", local=store.local_manifest())
+    st.session_state["store_status"] = r
+    lm = r.get("local") or {}
+    return lm.get("updated_at", "local")
+
+
 @st.cache_resource(show_spinner="loading digital twin ...")
-def get_twin() -> DigitalTwin:
+def get_twin(version: str = "") -> DigitalTwin:
     return DigitalTwin.load()
+
+
+STORE_VERSION = store_version()
 
 
 @st.cache_data(ttl=60, show_spinner=False)
 def live_snapshot(_nonce: int):
     """Latest values from ThingsBoard (cached 60 s so many viewers do not hammer the server)."""
-    st_, table = get_twin().live()
+    st_, table = get_twin(STORE_VERSION).live()
     return st_, table
 
 
 @st.cache_data(ttl=60, show_spinner=False)
 def recent_window(hours: int, _nonce: int):
     """Last `hours` hours straight from ThingsBoard (5-min averages, raw pump events) — same window as the dashboard."""
-    return get_twin().recent(hours=hours, interval_min=5 if hours <= 24 else 15)
+    return get_twin(STORE_VERSION).recent(hours=hours, interval_min=5 if hours <= 24 else 15)
 
 
 def ts_chart(df, cols, title, unit="", height=280, setpoints=None, step=False):
@@ -121,7 +137,7 @@ def stat_line(d, nd=2):
 
 @st.cache_resource(show_spinner="rendering layout ...")
 def static_figure(kind: str):
-    tw = get_twin()
+    tw = get_twin(STORE_VERSION)
     return {"layout": tw.layout_figure, "water": tw.water_plan, "flow": tw.flow_diagram, "corner": tw.corner_detail, "heatmap": tw.heatmap}[kind]()
 
 
@@ -172,7 +188,7 @@ def state_cards(state, ages: dict | None = None, row=None):
 
 
 # ---------------------------------------------------------------------------- sidebar
-tw = get_twin()
+tw = get_twin(STORE_VERSION)
 st.sidebar.markdown(f"**{PROJECT['name']}**  \n<small>{PROJECT['th']}</small>", unsafe_allow_html=True)
 page = st.sidebar.radio("Page", ["Overview", "Live", "History", "Layout & water", "What-if"], label_visibility="collapsed")
 VAR_LABEL = {"T": "air temperature (°C)", "RH": "relative humidity (%)", "VPD": "VPD (kPa)"}
@@ -186,12 +202,12 @@ RANGES = {"T": (20, 35), "RH": (40, 95), "VPD": (0.2, 2.0)}
 extended = st.sidebar.toggle("show more than the ThingsBoard dashboard", value=True,
                              help="off = only the keys the public dashboard shows; on = also LED, pumps, dosing configuration, controller health, derived values")
 d0, d1 = tw.data_span()
-st.sidebar.markdown(f"**Local store**  \n{d0:%Y-%m-%d} → {d1:%Y-%m-%d %H:%M}  \n{len(tw.data):,} × 10-min bins")
-if st.sidebar.button("⬇ Pull new data from ThingsBoard", help="incremental download since the last stored sample, then rebuild the 10-min table"):
-    with st.spinner("downloading ..."):
-        tw.update_data(verbose=False)
-    static_figure.clear(); st.sidebar.success(f"store now ends {tw.data_span()[1]:%Y-%m-%d %H:%M}")
-    st.rerun()
+_ss = st.session_state.get("store_status", {}); _lm = _ss.get("local") or {}
+st.sidebar.markdown(f"**History store**  \n{d0:%Y-%m-%d} → {d1:%Y-%m-%d %H:%M}  \n{len(tw.data):,} × 10-min bins  \n"
+                    f"<small>updated {pd.Timestamp(_lm['updated_at']).tz_convert(TZ):%d %b %H:%M} · {_ss.get('action', '')}</small>" if _lm.get("updated_at") else
+                    f"**History store**  \n{d0:%Y-%m-%d} → {d1:%Y-%m-%d %H:%M}  \n{len(tw.data):,} × 10-min bins", unsafe_allow_html=True)
+if st.sidebar.button("↻ check for new data", help="GitHub Actions refreshes the store from ThingsBoard every 30 min; the app checks every 10 min — this checks now"):
+    store_version.clear(); static_figure.clear(); st.rerun()
 with st.sidebar.expander("about"):
     st.code(tw.summary(), language=None)
     st.markdown(f"{PROJECT['en']}  \nSIS PFAL = plant factory with artificial lighting at the School of Integrated Science.  \n"

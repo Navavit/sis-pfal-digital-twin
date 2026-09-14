@@ -1,0 +1,55 @@
+name: update-data
+
+# Pull new telemetry from ThingsBoard every 30 min and publish the store to the orphan branch `data`
+# (single commit, force-pushed -> the repository does not grow). The web app polls that branch.
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update-data
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - run: pip install -r requirements.txt
+
+      - name: Restore the current store from the data branch (incremental update)
+        run: |
+          git fetch origin data --depth=1 || exit 0
+          git checkout origin/data -- data/raw/iot/thingsboard_long.parquet data/processed/iot_10min.parquet data/processed/store_manifest.json || true
+          git reset -q
+
+      - name: Pull new telemetry and rebuild the 10-min table
+        run: python scripts/update_store.py
+
+      - name: Publish to the data branch
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          PUB=$(mktemp -d)
+          mkdir -p "$PUB/data/raw/iot" "$PUB/data/processed"
+          cp data/raw/iot/thingsboard_long.parquet "$PUB/data/raw/iot/"
+          cp data/processed/iot_10min.parquet data/processed/store_manifest.json data/processed/iot_qc_report.csv "$PUB/data/processed/"
+          cd "$PUB"
+          git init -q -b data
+          git config user.name "sis-pfal-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add -A
+          git commit -q -m "store $(date -u +'%Y-%m-%dT%H:%MZ')"
+          git push --force "https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}.git" data
