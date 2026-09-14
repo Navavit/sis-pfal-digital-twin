@@ -25,7 +25,7 @@ sys.path.insert(0, str(ROOT))
 # is already loaded (version mismatch), drop it and re-import.
 import os  # noqa: E402
 os.environ["PYTHONPATH"] = str(ROOT) + os.pathsep + os.environ.get("PYTHONPATH", "")
-NEEDS_PKG = "2026.09.14.3"
+NEEDS_PKG = "2026.09.14.4"
 import pfal_twin  # noqa: E402
 if getattr(pfal_twin, "__version__", "") != NEEDS_PKG:
     for _m in [m for m in sys.modules if m == "pfal_twin" or m.startswith("pfal_twin.")]:
@@ -68,6 +68,48 @@ def live_snapshot(_nonce: int):
     """Latest values from ThingsBoard (cached 60 s so many viewers do not hammer the server)."""
     st_, table = get_twin().live()
     return st_, table
+
+
+@st.cache_data(ttl=60, show_spinner=False)
+def recent_window(hours: int, _nonce: int):
+    """Last `hours` hours straight from ThingsBoard (5-min averages, raw pump events) — same window as the dashboard."""
+    return get_twin().recent(hours=hours, interval_min=5 if hours <= 24 else 15)
+
+
+def ts_chart(df, cols, title, unit="", height=280, setpoints=None, step=False):
+    import plotly.graph_objects as go
+    fig = go.Figure()
+    for k in cols:
+        if k not in df.columns or df[k].dropna().empty:
+            continue
+        lab = tb.channel_label(k[3:-2]).split(" — ")[1] if k.startswith("gw.") else k.split(".")[0] + " " + tb.KEY_LABELS.get(k.split(".")[1], k.split(".")[1])
+        d = df[k].dropna()
+        fig.add_scatter(x=d.index, y=d.values, mode="lines", name=lab, line_shape="hv" if step else "linear", connectgaps=False)
+    for k, lab in (setpoints or {}).items():
+        if k in df.columns and df[k].dropna().size:
+            fig.add_scatter(x=df.index, y=df[k].ffill().values, mode="lines", name=lab, line=dict(dash="dash", color="grey"), line_shape="hv")
+    fig.update_layout(title=title, height=height, margin=dict(l=40, r=10, t=40, b=30), yaxis_title=unit, hovermode="x unified",
+                      legend=dict(orientation="h", y=-0.25, font=dict(size=10)))
+    return fig
+
+
+def dose_chart(df, dev, height=220):
+    """ThingsBoard 'Dose stage' state chart: three lanes (A, B, pH) that go high while the pump runs."""
+    import plotly.graph_objects as go
+    fig = go.Figure(); lanes = (("pumpA", "part A", 2), ("pumpB", "part B", 1), ("pumpPH", "acid (pH)", 0))
+    for k, lab, base in lanes:
+        col = f"{dev}.{k}"
+        if col in df.columns and df[col].dropna().size:
+            d = df[col].dropna()
+            fig.add_scatter(x=d.index, y=base + 0.8 * d.values, mode="lines", name=lab, line_shape="hv")
+    fig.update_layout(title=f"Dose stage — {dev} ({'growing 200 L' if dev == 'gc1' else 'nursery-2 100 L'})", height=height,
+                      margin=dict(l=40, r=10, t=40, b=30), yaxis=dict(tickvals=[0, 1, 2], ticktext=["acid", "B", "A"], range=[-0.2, 3]),
+                      hovermode="x unified", legend=dict(orientation="h", y=-0.35, font=dict(size=10)))
+    return fig
+
+
+def stat_line(d):
+    d = d.dropna(); return f"now {d.iloc[-1]:.2f} · min {d.min():.2f} · avg {d.mean():.2f} · max {d.max():.2f}" if d.size else "no data"
 
 
 @st.cache_resource(show_spinner="rendering layout ...")
@@ -145,10 +187,11 @@ with st.sidebar.expander("about"):
 # ============================================================================ LIVE
 if page == "Live":
     st.title("Live — latest values in the twin")
-    top = st.columns([1, 1, 4])
+    top = st.columns([1, 1, 1, 3])
     auto = top[0].toggle("auto-refresh (60 s)", value=True)
     if top[1].button("refresh now"):
-        live_snapshot.clear()
+        live_snapshot.clear(); recent_window.clear()
+    hours = top[2].selectbox("chart window", [6, 12, 24, 72, 168], index=2, format_func=lambda h: f"{h} h" if h < 48 else f"{h // 24} days")
 
     @st.fragment(run_every="60s" if auto else None)
     def live_view():
@@ -166,6 +209,30 @@ if page == "Live":
             st.warning(f"stale devices: {stale} — values older than 24 h are hidden from the twin")
         lo, hi = RANGES[var]
         st.plotly_chart(tw.figure_3d(var=var, st=state, cmin=lo, cmax=hi, height=650, title_prefix="LIVE ", public=not extended), **PLOTLY)
+        # ---- charts like the ThingsBoard dashboard (real-time window, 5-min averages) ----
+        st.markdown(f"#### Dashboard charts — last {hours} h (same window and 5-min averaging as ThingsBoard)")
+        try:
+            R = recent_window(hours, int(time.time() // 60))
+        except Exception as e:
+            st.error(f"could not load the window from ThingsBoard ({e})"); R = pd.DataFrame()
+        if R.empty:
+            st.info("no data in this window")
+        else:
+            ch = [f"gw.xy_md_{a}_t" for a in (20, 24, 21, 22, 23)]
+            c1, c2 = st.columns(2)
+            c1.plotly_chart(ts_chart(R, ch, "Temperature (XY-MD02 ×5)", "°C"), use_container_width=True, key="ts_T")
+            c2.plotly_chart(ts_chart(R, [k[:-2] + "_h" for k in ch], "Humidity (XY-MD02 ×5)", "% RH"), use_container_width=True, key="ts_RH")
+            c1, c2 = st.columns(2)
+            c1.plotly_chart(ts_chart(R, ["co2.CO2"], "CO₂", "ppm"), use_container_width=True, key="ts_co2")
+            c2.plotly_chart(ts_chart(R, ["co2.VPD", "co2.VOC"], "VPD / VOC (CO₂ controller)", ""), use_container_width=True, key="ts_vpd")
+            for dev, nm in (("gc1", "Grow controller gc1 — growing stage, 200 L tank"), ("gc2", "Grow controller gc2 — nursery 2, 100 L tank")):
+                st.markdown(f"**{nm}**")
+                c1, c2, c3 = st.columns([2, 2, 1.4])
+                c1.plotly_chart(ts_chart(R, [f"{dev}.ec"], f"EC — {stat_line(R.get(f'{dev}.ec', pd.Series(dtype=float)))}", "mS/cm", setpoints={f"{dev}.ecSetPoint": "EC set-point"}), use_container_width=True, key=f"ts_ec_{dev}")
+                c2.plotly_chart(ts_chart(R, [f"{dev}.ph"], f"pH — {stat_line(R.get(f'{dev}.ph', pd.Series(dtype=float)))}", "pH", setpoints={f"{dev}.pHSetPoint": "pH set-point"}), use_container_width=True, key=f"ts_ph_{dev}")
+                c3.plotly_chart(dose_chart(R, dev, height=280), use_container_width=True, key=f"dose_{dev}")
+            if extended:
+                st.plotly_chart(ts_chart(R, ["gc1.led", "gc1.pwmWater", "gc2.pwmWater", "co2.Relay_co2"], "LED / circulation pumps / CO₂ valve (beyond the dashboard)", "on = 1", step=True, height=220), use_container_width=True, key="ts_ctrl")
         with st.expander("latest values — all keys" if extended else "latest values — dashboard keys"):
             if table is not None:
                 t2 = table if extended else table[table.index.isin(tb.DASHBOARD_COLUMNS)]
