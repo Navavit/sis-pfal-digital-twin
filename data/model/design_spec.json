@@ -1,0 +1,23 @@
+{
+  "source": "data/raw/doc/Plan Layout PFAL SISKU.pdf (Civic Agrotech, Rev. 0, tolerance +/-5 cm) — DESIGN intent, not as-built",
+  "room_design": {"W": 3.0, "L": 8.9, "H": 2.85, "L_inner_side_view": 8.7, "W_front_view": 3.2, "note": "as-built (scan): L 7.12, W 3.01, H 2.58 m -> built ~1.6-1.8 m shorter and 0.27 m lower"},
+  "envelope": {"wall": "PS foam sandwich panel 50 mm, white, density 1.00 lb/ft3 (Isowall)", "roof": "PU foam metal sheet 2 in, slope 2 deg, gutter", "floor": "concrete 240 ksc, 10 cm raised, PU coating 3 mm (maroon)",
+               "window_design": "1 viewing window W140 x H100 cm, sill 82 cm (as-built: 2 panes ~2.3 x 1.1 m facing the cafe)", "door_design": "PVC outdoor swing door 1 x 2 m (as-built: aluminium door with glass upper half)"},
+  "electrical_loads_design": [
+    {"item": "LED module white+red 660 nm", "qty": 141, "unit_W": 42, "total_kW": 5.92},
+    {"item": "DC fan set (3 fans per growing layer)", "qty": 15, "unit_W": 15, "total_kW": 0.225},
+    {"item": "water pump + control system", "qty": 3, "unit_W": 150, "total_kW": 0.45},
+    {"item": "air conditioner", "qty": 2, "unit_W": 2000, "total_kW": 4.0},
+    {"item": "humidifier (as-built: portable dehumidifier)", "qty": 1, "unit_W": 420, "total_kW": 0.42},
+    {"item": "general use", "qty": 1, "unit_W": 1600, "total_kW": 1.6}
+  ],
+  "supply": "30 A, 3 phase; consumer unit, kWh meter, WiFi router, Environment Control + IoT gateway near the door; 20 mm conduit; junction box feeding the tiers",
+  "lighting": {"led": "white + red 660 nm LED modules, 42 W each, LED drivers on top of the rack", "room_light": "T8 18 W x2 twin batten"},
+  "rack_design": {"layers": "nursery 1 (NFT channels, 1 layer, door-end half of tier 1), nursery 2 (1 layer, far-end half of tier 1), growing stage 4 layers (tiers 2-5)",
+                  "fans": "3 DC fans per growing layer (15 sets)", "controls": "fan control cabinet + Grow Controller at the far end of the rack"},
+  "nutrient_design": {"tank_growing_L": 200, "tank_nursery1_L": 100, "tank_nursery2_L": 100,
+                      "growing_loop": "pump in the 200 L tank -> supply riser at the DOOR end ('inlet circulation set', tees to 4 layers) -> trays -> return riser at the FAR end ('return pipe to tank') -> 200 L tank; sample pot (EC/pH) at the tank",
+                      "nursery2": "dosing/control set mounted on the rack", "water": "RO filter set + RO storage at the far end (outside the wall in the drawing), supply pump into the room"},
+  "co2": "2 x 6Q CO2 cylinders outside (movable), CO2 dosing control cabinet must move with them",
+  "other_design_items": ["multi-purpose sink", "work table + chair", "seed germination shelf at the far corner"]
+}

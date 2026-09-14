@@ -1,0 +1,14 @@
+[theme]
+# colours taken from the School of Integrated Science logo
+primaryColor = "#1f6f6b"          # teal leaves
+backgroundColor = "#ffffff"
+secondaryBackgroundColor = "#f6f1e4"  # warm cream
+textColor = "#2b2b2b"
+font = "sans serif"
+
+[server]
+headless = true
+maxUploadSize = 50
+
+[browser]
+gatherUsageStats = false

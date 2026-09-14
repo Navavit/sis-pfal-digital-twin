@@ -1,0 +1,1363 @@
+{
+ "frame": "room",
+ "kinds": {
+  "supply": {
+   "color": "#1f77b4",
+   "width": 7,
+   "dash": "solid",
+   "name": "supply: white 1\" from the 200 L tank pump -> door-end riser"
+  },
+  "supply_hdr": {
+   "color": "#6baed6",
+   "width": 6,
+   "dash": "solid",
+   "name": "supply: white riser + headers with balancing valves (door end)"
+  },
+  "tray": {
+   "color": "#2ca02c",
+   "width": 6,
+   "dash": "solid",
+   "name": "flow along tray (door -> far end)"
+  },
+  "return": {
+   "color": "#08519c",
+   "width": 8,
+   "dash": "solid",
+   "name": "return: blue riser with tees (far end) / tray drops -> tanks"
+  },
+  "manifold": {
+   "color": "#4a4a8a",
+   "width": 7,
+   "dash": "dashdot",
+   "name": "blue 1.5\" floor manifold: drain / overflow between tanks"
+  },
+  "return_hyp": {
+   "color": "#b15928",
+   "width": 4,
+   "dash": "dash",
+   "name": "nursery pump lines (assumed, not seen)"
+  },
+  "drain": {
+   "color": "#08306b",
+   "width": 6,
+   "dash": "dot",
+   "name": "waste drain to outside through the wall (blue)"
+  },
+  "dosing": {
+   "color": "#7f3fbf",
+   "width": 3,
+   "dash": "dot",
+   "name": "dosing tubes A / B / pH (peristaltic, 6 mm)"
+  },
+  "fill_tap": {
+   "color": "#e6550d",
+   "width": 5,
+   "dash": "solid",
+   "name": "tap water (white PVC, wall valve labelled tap)"
+  },
+  "fill_ro": {
+   "color": "#7fc8d8",
+   "width": 5,
+   "dash": "solid",
+   "name": "RO water (white PVC, wall valve labelled RO)"
+  }
+ },
+ "edges": [
+  {
+   "name": "200 L tank bottom outlet (union, green valve) -> tee at the rack end",
+   "kind": "manifold",
+   "loop": "shared",
+   "dia": 0.048,
+   "evidence": "IMG_2559/2567/2544: blue 1.5\" pipe out of the 200 L tank through a union and a green valve to a tee; scan manifold X 6.15, Y 0.9-2.2",
+   "pts": [
+    [
+     6.45,
+     1.4,
+     0.1
+    ],
+    [
+     6.45,
+     1.4,
+     0.05
+    ],
+    [
+     6.15,
+     1.4,
+     0.05
+    ],
+    [
+     6.15,
+     2.1,
+     0.05
+    ]
+   ]
+  },
+  {
+   "name": "tee -> floor manifold",
+   "kind": "manifold",
+   "loop": "shared",
+   "dia": 0.048,
+   "evidence": "IMG_2559",
+   "pts": [
+    [
+     6.15,
+     2.1,
+     0.05
+    ],
+    [
+     6.15,
+     2.2,
+     0.05
+    ]
+   ]
+  },
+  {
+   "name": "waste drain -> through the X=L wall to outside",
+   "kind": "drain",
+   "loop": "shared",
+   "dia": 0.048,
+   "evidence": "IMG_2559 + scan: blue elbow at the wall corner passes through the wall at floor level; IMG_2553: blue pipe on the ground outside",
+   "pts": [
+    [
+     6.15,
+     2.2,
+     0.05
+    ],
+    [
+     7.12,
+     2.2,
+     0.05
+    ],
+    [
+     7.47,
+     2.2,
+     0.05
+    ]
+   ]
+  },
+  {
+   "name": "floor manifold along the aisle (far end -> door end)",
+   "kind": "manifold",
+   "loop": "shared",
+   "dia": 0.048,
+   "evidence": "IMG_2555/2568 + scan: blue 1.5\" line on the floor along the Y=W aisle; it connects the nursery tanks (unions + green valves) and the 200 L tank bottom with the outside drain -> drain / overflow manifold, not a pressurised supply",
+   "pts": [
+    [
+     6.15,
+     2.2,
+     0.05
+    ],
+    [
+     1.6,
+     2.2,
+     0.05
+    ]
+   ]
+  },
+  {
+   "name": "200 L tank pump -> white 1\" pipe through the lid (tee) -> rack side",
+   "kind": "supply",
+   "loop": "gc1",
+   "dia": 0.025,
+   "evidence": "IMG_2585: white 1\" pipe across the 200 L tank lid with a tee dropping through the lid into the tank = pump outlet",
+   "pts": [
+    [
+     6.6,
+     1.5,
+     0.62
+    ],
+    [
+     6.6,
+     1.95,
+     0.62
+    ],
+    [
+     6.4,
+     2.04,
+     0.3
+    ]
+   ]
+  },
+  {
+   "name": "white 1\" line along the rack (~0.3 m high) -> door end",
+   "kind": "supply",
+   "loop": "gc1",
+   "dia": 0.025,
+   "evidence": "IMG_2555/2568/2584: white line at ~0.3 m on the rack side running the whole aisle to the door-end riser. CAUTION: the nursery-2 tank also has a white bulkhead outlet into this line (IMG_2535) — which pump feeds which branch is not confirmed",
+   "pts": [
+    [
+     6.4,
+     2.04,
+     0.3
+    ],
+    [
+     0.83,
+     2.04,
+     0.3
+    ],
+    [
+     0.83,
+     2.1,
+     0.3
+    ]
+   ]
+  },
+  {
+   "name": "white 0.3 m line -> red valve -> nursery-2 tray inlet",
+   "kind": "supply_hdr",
+   "loop": "gc2",
+   "dia": 0.025,
+   "evidence": "IMG_2584: white pipe rises from the 0.3 m line next to the '4 tiers' fan box and enters the nursery-2 tray through a red ball valve (door end of the T1-N2 tray)",
+   "pts": [
+    [
+     3.3,
+     2.04,
+     0.3
+    ],
+    [
+     3.3,
+     2.04,
+     0.447
+    ],
+    [
+     3.3,
+     1.855,
+     0.447
+    ]
+   ]
+  },
+  {
+   "name": "white supply riser (door end)",
+   "kind": "supply_hdr",
+   "loop": "gc1",
+   "dia": 0.025,
+   "evidence": "IMG_2570 (confirmed 2026-09-14 = growing-stage inlet circulation set): white 1\" riser at the rack corner",
+   "pts": [
+    [
+     0.83,
+     2.1,
+     0.3
+    ],
+    [
+     0.83,
+     2.1,
+     2.067
+    ]
+   ]
+  },
+  {
+   "name": "tier 2 supply header + balancing valves -> tray inlet",
+   "kind": "supply_hdr",
+   "loop": "gc1",
+   "dia": 0.025,
+   "evidence": "IMG_2570-2573 (confirmed 2026-09-14): white 1\" header with two red ball valves teeing into the tray at the door end",
+   "pts": [
+    [
+     0.83,
+     2.1,
+     0.827
+    ],
+    [
+     0.851,
+     2.02,
+     0.827
+    ],
+    [
+     0.851,
+     1.505,
+     0.827
+    ]
+   ]
+  },
+  {
+   "name": "tray 2 (door -> far)",
+   "kind": "tray",
+   "loop": "gc1",
+   "dia": 0.048,
+   "evidence": "",
+   "pts": [
+    [
+     0.851,
+     1.505,
+     0.867
+    ],
+    [
+     6.152,
+     1.505,
+     0.867
+    ]
+   ]
+  },
+  {
+   "name": "tier 2 outlet -> return riser tee",
+   "kind": "return",
+   "loop": "gc1",
+   "dia": 0.034,
+   "evidence": "IMG_2561-2564 (confirmed 2026-09-14 = return to tank): blue branch across the tier end into the far-end riser",
+   "pts": [
+    [
+     6.152,
+     1.505,
+     0.907
+    ],
+    [
+     6.15,
+     1.505,
+     0.927
+    ],
+    [
+     6.15,
+     2.1,
+     0.927
+    ]
+   ]
+  },
+  {
+   "name": "tier 3 supply header + balancing valves -> tray inlet",
+   "kind": "supply_hdr",
+   "loop": "gc1",
+   "dia": 0.025,
+   "evidence": "IMG_2570-2573 (confirmed 2026-09-14): white 1\" header with two red ball valves teeing into the tray at the door end",
+   "pts": [
+    [
+     0.83,
+     2.1,
+     1.287
+    ],
+    [
+     0.851,
+     2.02,
+     1.287
+    ],
+    [
+     0.851,
+     1.505,
+     1.287
+    ]
+   ]
+  },
+  {
+   "name": "tray 3 (door -> far)",
+   "kind": "tray",
+   "loop": "gc1",
+   "dia": 0.048,
+   "evidence": "",
+   "pts": [
+    [
+     0.851,
+     1.505,
+     1.327
+    ],
+    [
+     6.152,
+     1.505,
+     1.327
+    ]
+   ]
+  },
+  {
+   "name": "tier 3 outlet -> return riser tee",
+   "kind": "return",
+   "loop": "gc1",
+   "dia": 0.034,
+   "evidence": "IMG_2561-2564 (confirmed 2026-09-14 = return to tank): blue branch across the tier end into the far-end riser",
+   "pts": [
+    [
+     6.152,
+     1.505,
+     1.367
+    ],
+    [
+     6.15,
+     1.505,
+     1.387
+    ],
+    [
+     6.15,
+     2.1,
+     1.387
+    ]
+   ]
+  },
+  {
+   "name": "tier 4 supply header + balancing valves -> tray inlet",
+   "kind": "supply_hdr",
+   "loop": "gc1",
+   "dia": 0.025,
+   "evidence": "IMG_2570-2573 (confirmed 2026-09-14): white 1\" header with two red ball valves teeing into the tray at the door end",
+   "pts": [
+    [
+     0.83,
+     2.1,
+     1.707
+    ],
+    [
+     0.851,
+     2.02,
+     1.707
+    ],
+    [
+     0.851,
+     1.505,
+     1.707
+    ]
+   ]
+  },
+  {
+   "name": "tray 4 (door -> far)",
+   "kind": "tray",
+   "loop": "gc1",
+   "dia": 0.048,
+   "evidence": "",
+   "pts": [
+    [
+     0.851,
+     1.505,
+     1.747
+    ],
+    [
+     6.152,
+     1.505,
+     1.747
+    ]
+   ]
+  },
+  {
+   "name": "tier 4 outlet -> return riser tee",
+   "kind": "return",
+   "loop": "gc1",
+   "dia": 0.034,
+   "evidence": "IMG_2561-2564 (confirmed 2026-09-14 = return to tank): blue branch across the tier end into the far-end riser",
+   "pts": [
+    [
+     6.152,
+     1.505,
+     1.787
+    ],
+    [
+     6.15,
+     1.505,
+     1.807
+    ],
+    [
+     6.15,
+     2.1,
+     1.807
+    ]
+   ]
+  },
+  {
+   "name": "tier 5 supply header + balancing valves -> tray inlet",
+   "kind": "supply_hdr",
+   "loop": "gc1",
+   "dia": 0.025,
+   "evidence": "IMG_2570-2573 (confirmed 2026-09-14): white 1\" header with two red ball valves teeing into the tray at the door end",
+   "pts": [
+    [
+     0.83,
+     2.1,
+     2.067
+    ],
+    [
+     0.851,
+     2.02,
+     2.067
+    ],
+    [
+     0.851,
+     1.505,
+     2.067
+    ]
+   ]
+  },
+  {
+   "name": "tray 5 (door -> far)",
+   "kind": "tray",
+   "loop": "gc1",
+   "dia": 0.048,
+   "evidence": "",
+   "pts": [
+    [
+     0.851,
+     1.505,
+     2.107
+    ],
+    [
+     6.152,
+     1.505,
+     2.107
+    ]
+   ]
+  },
+  {
+   "name": "tier 5 outlet -> return riser tee",
+   "kind": "return",
+   "loop": "gc1",
+   "dia": 0.034,
+   "evidence": "IMG_2561-2564 (confirmed 2026-09-14 = return to tank): blue branch across the tier end into the far-end riser",
+   "pts": [
+    [
+     6.152,
+     1.505,
+     2.147
+    ],
+    [
+     6.15,
+     1.505,
+     2.167
+    ],
+    [
+     6.15,
+     2.1,
+     2.167
+    ]
+   ]
+  },
+  {
+   "name": "blue return riser (far end) -> 200 L tank",
+   "kind": "return",
+   "loop": "gc1",
+   "dia": 0.048,
+   "evidence": "IMG_2557 + scan: vertical blue pipe at X 6.15 with a tee at every tier; drawing p.7 shows it discharging into the 200 L tank",
+   "pts": [
+    [
+     6.15,
+     2.1,
+     2.167
+    ],
+    [
+     6.15,
+     2.1,
+     0.7
+    ],
+    [
+     6.4,
+     1.6,
+     0.62
+    ]
+   ]
+  },
+  {
+   "name": "N1 tank pump -> door-end corner -> nursery-1 header (line assumed)",
+   "kind": "return_hyp",
+   "loop": "n1",
+   "dia": 0.025,
+   "evidence": "by design each nursery tank has its own pump; the line up to the nursery-1 header was not photographed (a second white pipe at the door-end corner?)",
+   "pts": [
+    [
+     1.66,
+     1.9,
+     0.3
+    ],
+    [
+     1.66,
+     2.0,
+     0.28
+    ],
+    [
+     0.89,
+     2.0,
+     0.28
+    ],
+    [
+     0.89,
+     2.06,
+     0.407
+    ]
+   ]
+  },
+  {
+   "name": "nursery-1 header with 3 valves -> tray T1-N1",
+   "kind": "supply_hdr",
+   "loop": "n1",
+   "dia": 0.025,
+   "evidence": "IMG_2569: white 1\" header above the tray end with three red ball valves, one per tray channel (door end)",
+   "pts": [
+    [
+     0.89,
+     2.06,
+     0.407
+    ],
+    [
+     0.851,
+     1.98,
+     0.407
+    ],
+    [
+     0.851,
+     1.1,
+     0.407
+    ]
+   ]
+  },
+  {
+   "name": "tray T1-N1 (nursery 1, flat flood tray, 3 channels)",
+   "kind": "tray",
+   "loop": "n1",
+   "dia": 0.048,
+   "evidence": "",
+   "pts": [
+    [
+     0.851,
+     1.505,
+     0.447
+    ],
+    [
+     2.17,
+     1.505,
+     0.447
+    ]
+   ]
+  },
+  {
+   "name": "tray T1-N1 drain -> blue drop -> green valve -> N1 tank",
+   "kind": "return",
+   "loop": "n1",
+   "dia": 0.034,
+   "evidence": "IMG_2565/2555: blue drop from the tray bottom above the tank; green valve into the tank side",
+   "pts": [
+    [
+     1.66,
+     1.505,
+     0.367
+    ],
+    [
+     1.66,
+     1.505,
+     0.4
+    ],
+    [
+     1.72,
+     1.85,
+     0.3
+    ]
+   ]
+  },
+  {
+   "name": "N1 tank bottom <-> floor manifold (union + green valve)",
+   "kind": "manifold",
+   "loop": "shared",
+   "dia": 0.034,
+   "evidence": "IMG_2555/2558: blue elbows between the N1 tank side and the floor manifold — for emptying / overflow",
+   "pts": [
+    [
+     1.9,
+     1.85,
+     0.12
+    ],
+    [
+     1.9,
+     1.95,
+     0.05
+    ],
+    [
+     1.9,
+     2.2,
+     0.05
+    ]
+   ]
+  },
+  {
+   "name": "N2 tank pump -> white bulkhead outlet -> white 0.3 m line",
+   "kind": "supply",
+   "loop": "gc2",
+   "dia": 0.025,
+   "evidence": "IMG_2535: white 1\" pipe out of the nursery-2 tank side (bulkhead) with an elbow into the white line along the rack; joins the same line as the 200 L pump - which pump serves the nursery-2 inlet vs. the growing riser is not confirmed",
+   "pts": [
+    [
+     5.6,
+     1.85,
+     0.25
+    ],
+    [
+     5.6,
+     2.0,
+     0.3
+    ],
+    [
+     5.6,
+     2.04,
+     0.3
+    ]
+   ]
+  },
+  {
+   "name": "tray T1-N2 (nursery 2, flat flood tray)",
+   "kind": "tray",
+   "loop": "gc2",
+   "dia": 0.048,
+   "evidence": "",
+   "pts": [
+    [
+     3.3,
+     1.505,
+     0.447
+    ],
+    [
+     5.45,
+     1.505,
+     0.447
+    ]
+   ]
+  },
+  {
+   "name": "tray T1-N2 drain -> drop with valve 'tank circulation' -> N2 tank",
+   "kind": "return",
+   "loop": "gc2",
+   "dia": 0.034,
+   "evidence": "IMG_2558: blue drop with a green ball valve labelled 'ก๊อกน้ำวนถัง' entering the nursery-2 tank",
+   "pts": [
+    [
+     5.7,
+     1.655,
+     0.367
+    ],
+    [
+     5.7,
+     1.655,
+     0.4
+    ],
+    [
+     5.7,
+     1.8,
+     0.3
+    ]
+   ]
+  },
+  {
+   "name": "tray T1-N2 second drop -> floor manifold",
+   "kind": "manifold",
+   "loop": "shared",
+   "dia": 0.034,
+   "evidence": "IMG_2558: left blue drop without a valve to the floor manifold (overflow / emptying)",
+   "pts": [
+    [
+     5.45,
+     1.655,
+     0.367
+    ],
+    [
+     5.45,
+     1.655,
+     0.07
+    ],
+    [
+     5.45,
+     1.95,
+     0.07
+    ],
+    [
+     5.45,
+     2.2,
+     0.05
+    ]
+   ]
+  },
+  {
+   "name": "N2 tank side unions (+ green valve) -> floor manifold -> 200 L tank corner",
+   "kind": "manifold",
+   "loop": "shared",
+   "dia": 0.034,
+   "evidence": "IMG_2560/2544: two unions on the tank side, one through a green valve, teeing into the blue floor pipe to the tee at the 200 L tank",
+   "pts": [
+    [
+     5.93,
+     1.85,
+     0.12
+    ],
+    [
+     6.05,
+     1.95,
+     0.07
+    ],
+    [
+     6.15,
+     1.95,
+     0.07
+    ]
+   ]
+  },
+  {
+   "name": "dosing box A (gc2) -> nursery-2 tank",
+   "kind": "dosing",
+   "loop": "gc2",
+   "dia": 0.006,
+   "evidence": "site confirmation 2026-09-14: dosing box A (item 14) doses into the nursery-2 tank (item 20); IMG_2541 tubes",
+   "pts": [
+    [
+     5.55,
+     2.05,
+     0.55
+    ],
+    [
+     5.55,
+     1.95,
+     0.4
+    ],
+    [
+     5.7,
+     1.8,
+     0.36
+    ]
+   ]
+  },
+  {
+   "name": "dosing box B (gc1) -> 200 L tank",
+   "kind": "dosing",
+   "loop": "gc1",
+   "dia": 0.006,
+   "evidence": "by elimination: dosing box B beside the return riser serves the growing-stage tank; IMG_2542",
+   "pts": [
+    [
+     6.05,
+     2.05,
+     0.6
+    ],
+    [
+     6.3,
+     2.0,
+     0.6
+    ],
+    [
+     6.5,
+     1.9,
+     0.62
+    ]
+   ]
+  },
+  {
+   "name": "RO storage tank -> centrifugal pump -> RO filter set",
+   "kind": "fill_ro",
+   "loop": "shared",
+   "dia": 0.025,
+   "evidence": "IMG_2579: blue pipe from the slim tank to the yellow pump and up to the filter cartridges (schematic route)",
+   "pts": [
+    [
+     7.85,
+     0.5,
+     0.15
+    ],
+    [
+     7.7,
+     1.05,
+     0.15
+    ],
+    [
+     7.7,
+     1.35,
+     0.15
+    ],
+    [
+     7.7,
+     1.45,
+     1.1
+    ]
+   ]
+  },
+  {
+   "name": "RO filter set -> along the outside wall -> wall valve 'RO'",
+   "kind": "fill_ro",
+   "loop": "shared",
+   "dia": 0.025,
+   "evidence": "IMG_2579/2577: two blue lines run along the container wall at ~1 m and come through the far-end wall at the valves (IMG_2566)",
+   "pts": [
+    [
+     7.7,
+     1.75,
+     1.1
+    ],
+    [
+     7.35,
+     2.2,
+     1.1
+    ],
+    [
+     7.35,
+     2.62,
+     0.6
+    ],
+    [
+     7.12,
+     2.62,
+     0.45
+    ]
+   ]
+  },
+  {
+   "name": "municipal tap -> along the outside wall -> wall valve 'tap'",
+   "kind": "fill_tap",
+   "loop": "shared",
+   "dia": 0.025,
+   "evidence": "pptx slide 3: tap water 1/2 in; IMG_2577: second blue line along the wall (source not photographed)",
+   "pts": [
+    [
+     7.9,
+     2.9,
+     0.1
+    ],
+    [
+     7.35,
+     2.9,
+     1.05
+    ],
+    [
+     7.35,
+     2.55,
+     0.6
+    ],
+    [
+     7.12,
+     2.55,
+     0.45
+    ]
+   ]
+  },
+  {
+   "name": "waste outlet -> along the ground -> buried spent-solution tank (per plan)",
+   "kind": "drain",
+   "loop": "shared",
+   "dia": 0.048,
+   "evidence": "IMG_2577: blue pipes leave the far-end wall at ground level and run along the ground; pptx slide 3: to a buried tank for used solution (tank not seen)",
+   "pts": [
+    [
+     7.47,
+     2.2,
+     0.05
+    ],
+    [
+     8.2,
+     2.2,
+     0.02
+    ],
+    [
+     8.6,
+     2.35,
+     -0.3
+    ]
+   ]
+  },
+  {
+   "name": "wall valve 'tap water' -> floor line",
+   "kind": "fill_tap",
+   "loop": "shared",
+   "dia": 0.025,
+   "evidence": "IMG_2566: left valve labelled 'น้ำประปา'; IMG_2568: two white lines on the floor next to the rack",
+   "pts": [
+    [
+     7.08,
+     2.55,
+     0.45
+    ],
+    [
+     7.08,
+     2.55,
+     0.06
+    ],
+    [
+     7.08,
+     2.06,
+     0.06
+    ],
+    [
+     1.13,
+     2.06,
+     0.06
+    ]
+   ]
+  },
+  {
+   "name": "wall valve 'RO water' -> floor line",
+   "kind": "fill_ro",
+   "loop": "shared",
+   "dia": 0.025,
+   "evidence": "IMG_2566: right valve labelled 'น้ำ RO'; drawing p.3/5: RO filter set at the far end",
+   "pts": [
+    [
+     7.08,
+     2.62,
+     0.45
+    ],
+    [
+     7.08,
+     2.62,
+     0.06
+    ],
+    [
+     7.08,
+     2.11,
+     0.06
+    ],
+    [
+     1.13,
+     2.11,
+     0.06
+    ]
+   ]
+  },
+  {
+   "name": "tank fill (small red valve)",
+   "kind": "fill_tap",
+   "loop": "shared",
+   "dia": 0.02,
+   "evidence": "IMG_2559/2567: one of the two white lines branches through a small red valve into the tank; which line (tap / RO) not read",
+   "pts": [
+    [
+     6.62,
+     2.06,
+     0.06
+    ],
+    [
+     6.62,
+     1.95,
+     0.4
+    ],
+    [
+     6.6,
+     1.85,
+     0.55
+    ]
+   ]
+  },
+  {
+   "name": "nursery-1 tank fill",
+   "kind": "fill_ro",
+   "loop": "n1",
+   "dia": 0.02,
+   "evidence": "assumed: RO make-up water for the nursery tanks",
+   "pts": [
+    [
+     1.66,
+     2.11,
+     0.06
+    ],
+    [
+     1.66,
+     1.9,
+     0.3
+    ]
+   ]
+  },
+  {
+   "name": "nursery-2 tank fill",
+   "kind": "fill_ro",
+   "loop": "gc2",
+   "dia": 0.02,
+   "evidence": "assumed",
+   "pts": [
+    [
+     5.65,
+     2.11,
+     0.06
+    ],
+    [
+     5.65,
+     1.9,
+     0.3
+    ]
+   ]
+  }
+ ],
+ "fittings": [
+  {
+   "name": "200 L tank bottom union (manifold)",
+   "type": "union",
+   "xyz": [
+    6.35,
+    1.4,
+    0.05
+   ],
+   "evidence": "IMG_2559"
+  },
+  {
+   "name": "tee: manifold / drain",
+   "type": "tee",
+   "xyz": [
+    6.15,
+    2.1,
+    0.05
+   ],
+   "evidence": "IMG_2559"
+  },
+  {
+   "name": "green valve (200 L tank bottom -> manifold)",
+   "type": "valve_green",
+   "xyz": [
+    6.15,
+    1.75,
+    0.05
+   ],
+   "evidence": "IMG_2559/2567"
+  },
+  {
+   "name": "white 1\" bulkhead outlet of the 200 L tank (pump supply)",
+   "type": "union",
+   "xyz": [
+    6.55,
+    2.0,
+    0.3
+   ],
+   "evidence": "IMG_2535"
+  },
+  {
+   "name": "drain outlet through the wall",
+   "type": "wall_outlet",
+   "xyz": [
+    7.12,
+    2.2,
+    0.05
+   ],
+   "evidence": "IMG_2559: blue elbow at the wall corner leaving the room; IMG_2553: blue pipe on the ground outside"
+  },
+  {
+   "name": "tank fill valve (small, red)",
+   "type": "valve_red",
+   "xyz": [
+    6.62,
+    1.95,
+    0.4
+   ],
+   "evidence": "IMG_2559/2567"
+  },
+  {
+   "name": "wall valve 'tap water'",
+   "type": "wall_valve",
+   "xyz": [
+    7.08,
+    2.55,
+    0.45
+   ],
+   "evidence": "IMG_2566 label"
+  },
+  {
+   "name": "wall valve 'RO water'",
+   "type": "wall_valve",
+   "xyz": [
+    7.08,
+    2.62,
+    0.45
+   ],
+   "evidence": "IMG_2566 label"
+  },
+  {
+   "name": "RO plant pump (outside)",
+   "type": "pump",
+   "xyz": [
+    7.7,
+    1.2,
+    0.2
+   ],
+   "evidence": "IMG_2579"
+  },
+  {
+   "name": "wall penetration of the fresh-water lines",
+   "type": "wall_outlet",
+   "xyz": [
+    7.12,
+    2.58,
+    0.45
+   ],
+   "evidence": "IMG_2577/2566"
+  },
+  {
+   "name": "pump in nursery-1 tank",
+   "type": "pump",
+   "xyz": [
+    1.66,
+    1.2049999999999998,
+    0.15
+   ],
+   "evidence": "assumed (Jecod DC pump controller IMG_2542)"
+  },
+  {
+   "name": "pump in nursery-2 tank",
+   "type": "pump",
+   "xyz": [
+    5.65,
+    1.2049999999999998,
+    0.15
+   ],
+   "evidence": "assumed"
+  },
+  {
+   "name": "green valve, nursery-1 tank return",
+   "type": "valve_green",
+   "xyz": [
+    1.74,
+    1.9,
+    0.1
+   ],
+   "evidence": "IMG_2565 (same arrangement seen at both tanks)"
+  },
+  {
+   "name": "nursery-1 header valve 1 (red)",
+   "type": "valve_red",
+   "xyz": [
+    0.851,
+    1.2,
+    0.40700000000000003
+   ],
+   "evidence": "IMG_2569: three red ball valves on the nursery header, door end"
+  },
+  {
+   "name": "nursery-1 header valve 2 (red)",
+   "type": "valve_red",
+   "xyz": [
+    0.851,
+    1.5,
+    0.40700000000000003
+   ],
+   "evidence": "IMG_2569: three red ball valves on the nursery header, door end"
+  },
+  {
+   "name": "nursery-1 header valve 3 (red)",
+   "type": "valve_red",
+   "xyz": [
+    0.851,
+    1.8,
+    0.40700000000000003
+   ],
+   "evidence": "IMG_2569: three red ball valves on the nursery header, door end"
+  },
+  {
+   "name": "green valve, nursery-2 tank return",
+   "type": "valve_green",
+   "xyz": [
+    5.73,
+    1.9,
+    0.1
+   ],
+   "evidence": "IMG_2565"
+  },
+  {
+   "name": "pump in growing-stage tank",
+   "type": "pump",
+   "xyz": [
+    6.65,
+    1.6,
+    0.15
+   ],
+   "evidence": "design p.6: pump in the 200 L tank; outlet = white bulkhead line (IMG_2535)"
+  },
+  {
+   "name": "tier 2 outlet valve (red, return branch)",
+   "type": "valve_red",
+   "xyz": [
+    6.15,
+    1.805,
+    0.927
+   ],
+   "evidence": "IMG_2555/2569: red-handle valves on the blue branches at the far end"
+  },
+  {
+   "name": "tier 2 balancing valve 1 (red, supply header)",
+   "type": "valve_red",
+   "xyz": [
+    0.851,
+    1.25,
+    0.8270000000000001
+   ],
+   "evidence": "IMG_2570-2573: two red ball valves per tier on the door-end header"
+  },
+  {
+   "name": "tier 2 balancing valve 2 (red, supply header)",
+   "type": "valve_red",
+   "xyz": [
+    0.851,
+    1.65,
+    0.8270000000000001
+   ],
+   "evidence": "IMG_2570-2573: two red ball valves per tier on the door-end header"
+  },
+  {
+   "name": "tier 3 outlet valve (red, return branch)",
+   "type": "valve_red",
+   "xyz": [
+    6.15,
+    1.805,
+    1.387
+   ],
+   "evidence": "IMG_2555/2569: red-handle valves on the blue branches at the far end"
+  },
+  {
+   "name": "tier 3 balancing valve 1 (red, supply header)",
+   "type": "valve_red",
+   "xyz": [
+    0.851,
+    1.25,
+    1.287
+   ],
+   "evidence": "IMG_2570-2573: two red ball valves per tier on the door-end header"
+  },
+  {
+   "name": "tier 3 balancing valve 2 (red, supply header)",
+   "type": "valve_red",
+   "xyz": [
+    0.851,
+    1.65,
+    1.287
+   ],
+   "evidence": "IMG_2570-2573: two red ball valves per tier on the door-end header"
+  },
+  {
+   "name": "tier 4 outlet valve (red, return branch)",
+   "type": "valve_red",
+   "xyz": [
+    6.15,
+    1.805,
+    1.807
+   ],
+   "evidence": "IMG_2555/2569: red-handle valves on the blue branches at the far end"
+  },
+  {
+   "name": "tier 4 balancing valve 1 (red, supply header)",
+   "type": "valve_red",
+   "xyz": [
+    0.851,
+    1.25,
+    1.707
+   ],
+   "evidence": "IMG_2570-2573: two red ball valves per tier on the door-end header"
+  },
+  {
+   "name": "tier 4 balancing valve 2 (red, supply header)",
+   "type": "valve_red",
+   "xyz": [
+    0.851,
+    1.65,
+    1.707
+   ],
+   "evidence": "IMG_2570-2573: two red ball valves per tier on the door-end header"
+  },
+  {
+   "name": "tier 5 outlet valve (red, return branch)",
+   "type": "valve_red",
+   "xyz": [
+    6.15,
+    1.805,
+    2.1670000000000003
+   ],
+   "evidence": "IMG_2555/2569: red-handle valves on the blue branches at the far end"
+  },
+  {
+   "name": "tier 5 balancing valve 1 (red, supply header)",
+   "type": "valve_red",
+   "xyz": [
+    0.851,
+    1.25,
+    2.067
+   ],
+   "evidence": "IMG_2570-2573: two red ball valves per tier on the door-end header"
+  },
+  {
+   "name": "tier 5 balancing valve 2 (red, supply header)",
+   "type": "valve_red",
+   "xyz": [
+    0.851,
+    1.65,
+    2.067
+   ],
+   "evidence": "IMG_2570-2573: two red ball valves per tier on the door-end header"
+  }
+ ],
+ "note": "Hand-modelled centre-lines. Growing supply = white 1\" from the 200 L tank pump (bulkhead, IMG_2535) along the rack to the door-end riser; return = blue far-end riser. Blue 1.5\" floor line = drain/overflow manifold joining all tank bottoms and the outside outlet. Each nursery tank has its own pump by design; their lines to the trays are assumed (dashed). No flow sensor: velocities are schematic."
+}
