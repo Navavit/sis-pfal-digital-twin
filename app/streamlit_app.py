@@ -174,7 +174,13 @@ def state_cards(state, ages: dict | None = None, row=None):
 tw = get_twin()
 st.sidebar.markdown(f"**{PROJECT['name']}**  \n<small>{PROJECT['th']}</small>", unsafe_allow_html=True)
 page = st.sidebar.radio("Page", ["Overview", "Live", "History", "Layout & water", "What-if"], label_visibility="collapsed")
-var = st.sidebar.selectbox("3-D colour variable", ["T", "RH", "VPD"], format_func=lambda v: {"T": "air temperature", "RH": "relative humidity", "VPD": "VPD"}[v])
+VAR_LABEL = {"T": "air temperature (°C)", "RH": "relative humidity (%)", "VPD": "VPD (kPa)"}
+
+
+def colour_picker(key):
+    """Radio next to a 3-D view: which variable colours the rack and the XY-MD02 markers."""
+    return st.radio("colour the 3-D twin by", list(VAR_LABEL), format_func=VAR_LABEL.get, horizontal=True, key=key)
+
 RANGES = {"T": (20, 35), "RH": (40, 95), "VPD": (0.2, 2.0)}
 extended = st.sidebar.toggle("show more than the ThingsBoard dashboard", value=True,
                              help="off = only the keys the public dashboard shows; on = also LED, pumps, dosing configuration, controller health, derived values")
@@ -196,9 +202,9 @@ if page == "Overview":
     st.title("SIS PFAL Digital Twin")
     st.markdown(f"**{PROJECT['th']}**  \n{PROJECT['en']}")
     c1, c2 = st.columns([1.35, 1])
-    c1.image(str(PH / "IMG_2518.jpg"), caption="SIS PFAL — plant factory with artificial lighting, School of Integrated Science, Kasetsart University (13 Sep 2026)", use_container_width=True)
-    c2.image(str(PH / "IMG_2519.jpg"), caption="Front of the unit: anteroom entrance beside the SIS KU coffee corner", use_container_width=True)
-    c2.image(str(PH / "IMG_2520.jpg"), caption="Inside: one 5-tier rack, 5.4 × 1.0 m, in a 7.1 × 3.0 × 2.6 m room", use_container_width=True)
+    c1.image(str(PH / "IMG_2518.jpg"), caption="SIS PFAL — plant factory with artificial lighting, School of Integrated Science, Kasetsart University (13 Sep 2026)", width="stretch")
+    c2.image(str(PH / "IMG_2519.jpg"), caption="Front of the unit: anteroom entrance beside the SIS KU coffee corner", width="stretch")
+    c2.image(str(PH / "IMG_2520.jpg"), caption="Inside: one 5-tier rack, 5.4 × 1.0 m, in a 7.1 × 3.0 × 2.6 m room", width="stretch")
 
     st.markdown("""
 #### แอปนี้ทำอะไรได้ · What this app does
@@ -269,8 +275,8 @@ elif page == "Live":
 
         # ---- the twin itself
         st.markdown("#### 3-D twin — coloured by the latest readings")
-        lo, hi = RANGES[var]
-        st.plotly_chart(tw.figure_3d(var=var, st=state, cmin=lo, cmax=hi, height=620, title_prefix="LIVE ", public=not extended), **PLOTLY)
+        var = colour_picker("var_live"); lo, hi = RANGES[var]
+        st.plotly_chart(tw.figure_3d(var=var, st=state, cmin=lo, cmax=hi, height=620, title_prefix="LIVE ", public=not extended), **PLOTLY, key=f"live3d_{var}")
 
         # ---- details, collapsed (the charts already show the numbers)
         with st.expander("current values as cards" + (" + controller state / dosing configuration" if extended else "")):
@@ -334,8 +340,8 @@ elif page == "History":
     state = tw.state(pd.Timestamp(pick))
     with st.expander(f"values at {state.time:%Y-%m-%d %H:%M} as cards"):
         state_cards(state, row=hist.loc[state.time] if state.time in hist.index else None)
-    lo, hi = RANGES[var]
-    st.plotly_chart(tw.figure_3d(var=var, st=state, cmin=lo, cmax=hi, height=600, public=not extended), **PLOTLY)
+    var = colour_picker("var_hist"); lo, hi = RANGES[var]
+    st.plotly_chart(tw.figure_3d(var=var, st=state, cmin=lo, cmax=hi, height=600, public=not extended), **PLOTLY, key=f"hist3d_{var}")
 
     st.markdown("#### Time series")
     import plotly.graph_objects as go
