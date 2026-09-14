@@ -25,7 +25,7 @@ sys.path.insert(0, str(ROOT))
 # is already loaded (version mismatch), drop it and re-import.
 import os  # noqa: E402
 os.environ["PYTHONPATH"] = str(ROOT) + os.pathsep + os.environ.get("PYTHONPATH", "")
-NEEDS_PKG = "2026.09.14.4"
+NEEDS_PKG = "2026.09.14.5"
 import pfal_twin  # noqa: E402
 if getattr(pfal_twin, "__version__", "") != NEEDS_PKG:
     for _m in [m for m in sys.modules if m == "pfal_twin" or m.startswith("pfal_twin.")]:
@@ -108,8 +108,8 @@ def dose_chart(df, dev, height=220):
     return fig
 
 
-def stat_line(d):
-    d = d.dropna(); return f"now {d.iloc[-1]:.2f} · min {d.min():.2f} · avg {d.mean():.2f} · max {d.max():.2f}" if d.size else "no data"
+def stat_line(d, nd=2):
+    d = d.dropna(); return f"now {d.iloc[-1]:.{nd}f} · min {d.min():.{nd}f} · avg {d.mean():.{nd}f} · max {d.max():.{nd}f}" if d.size else "no data"
 
 
 @st.cache_resource(show_spinner="rendering layout ...")
@@ -167,7 +167,7 @@ def state_cards(state, ages: dict | None = None, row=None):
 # ---------------------------------------------------------------------------- sidebar
 tw = get_twin()
 st.sidebar.markdown(f"**{PROJECT['name']}**  \n<small>{PROJECT['th']}</small>", unsafe_allow_html=True)
-page = st.sidebar.radio("Page", ["Live", "History", "Layout & water", "What-if"], label_visibility="collapsed")
+page = st.sidebar.radio("Page", ["Overview", "Live", "History", "Layout & water", "What-if"], label_visibility="collapsed")
 var = st.sidebar.selectbox("3-D colour variable", ["T", "RH", "VPD"], format_func=lambda v: {"T": "air temperature", "RH": "relative humidity", "VPD": "VPD"}[v])
 RANGES = {"T": (20, 35), "RH": (40, 95), "VPD": (0.2, 2.0)}
 extended = st.sidebar.toggle("show more than the ThingsBoard dashboard", value=True,
@@ -184,17 +184,52 @@ with st.sidebar.expander("about"):
     st.markdown(f"{PROJECT['en']}  \nSIS PFAL = plant factory with artificial lighting at the School of Integrated Science.  \n"
                 "Source: ThingsBoard public dashboard *Vertical Smart Farming* (cat-smartgrow.com). Geometry from the LiDAR scan of 2026-09-13.")
 
+# ============================================================================ OVERVIEW
+if page == "Overview":
+    PH = ASSETS / "photos"
+    st.title("SIS PFAL Digital Twin")
+    st.markdown(f"**{PROJECT['th']}**  \n{PROJECT['en']}")
+    c1, c2 = st.columns([1.35, 1])
+    c1.image(str(PH / "IMG_2518.jpg"), caption="SIS PFAL — plant factory with artificial lighting, School of Integrated Science, Kasetsart University (13 Sep 2026)", use_container_width=True)
+    c2.image(str(PH / "IMG_2519.jpg"), caption="Front of the unit: anteroom entrance beside the SIS KU coffee corner", use_container_width=True)
+    c2.image(str(PH / "IMG_2520.jpg"), caption="Inside: one 5-tier rack, 5.4 × 1.0 m, in a 7.1 × 3.0 × 2.6 m room", use_container_width=True)
+
+    st.markdown("""
+#### แอปนี้ทำอะไรได้ · What this app does
+Digital twin = แบบจำลองห้องปลูกจริง (รูปทรงจาก LiDAR) ที่ผูกกับข้อมูลเซ็นเซอร์จริงจาก ThingsBoard — ดูสภาพห้อง **ตอนนี้**, **ย้อนหลัง** และ **ลองสถานการณ์** ได้จากที่เดียว
+""")
+    k1, k2, k3, k4 = st.columns(4)
+    k1.markdown("**📡 Live**  \nกราฟแบบ dashboard (T/RH 5 จุด, CO₂, EC/pH + set-point, การจ่ายปุ๋ย) + twin 3-D ระบายสีตามค่าจริง รีเฟรชทุก 60 วิ  \n*Real-time charts and the 3-D twin coloured by live readings*")
+    k2.markdown("**🕓 History**  \nเลื่อนเวลาดูห้อง ณ ช่วงใดก็ได้ตั้งแต่ ธ.ค. 2025, กราฟ, KPI, เหตุการณ์ผิดปกติ, ดาวน์โหลด CSV  \n*Time slider, KPIs, events and CSV export since Dec 2025*")
+    k3.markdown("**🗺️ Layout & water**  \nผัง as-built จาก point cloud, ระบบท่อน้ำ/ปุ๋ย, process flow และแอนิเมชันการไหล  \n*As-built layout, pipework and flow animation*")
+    k4.markdown("**🌱 What-if**  \nเลือกสัดส่วนผักบน 700 หลุม (ชั้น 2–5) ดูผังรายหลุม 3-D + ผลผลิต/รายได้/แสงที่ต้องการ, สถานการณ์แสง–พลังงาน  \n*Crop-mix and light/energy scenarios*")
+
+    st.markdown("#### ข้อมูลที่ใช้ · Data behind the twin")
+    R_, K_ = tw.model["room"], tw.model["rack"]
+    f1, f2, f3, f4, f5 = st.columns(5)
+    f1.metric("Room (L × W × H)", f"{R_['L']:.2f} × {R_['W']:.2f} × {R_['H']:.2f} m", "LiDAR scan, 2 passes", delta_color="off")
+    f2.metric("Rack", f"{K_['length']:.2f} × {K_['width']:.2f} m · {len(K_['tiers'])} tiers", "700 holes on tiers 2–5", delta_color="off")
+    f3.metric("Sensors / equipment", f"{len(tw.sensors)} / {len(tw.equipment)}", "5 × XY-MD02 T/RH, CO₂, 2 grow controllers", delta_color="off")
+    f4.metric("IoT records", f"{len(tw.data):,} × 10 min", f"{d0:%d %b %Y} → {d1:%d %b %Y}", delta_color="off")
+    f5.metric("Source", "ThingsBoard", "cat-smartgrow.com (Civic Agrotech)", delta_color="off")
+    g1, g2, g3 = st.columns(3)
+    g1.image(str(PH / "IMG_2553.jpg"), caption="Porch: CO₂ cylinders, outdoor sensor and control box", use_container_width=True)
+    g2.image(str(PH / "IMG_2534.jpg"), caption="Tier 1: nursery trays and reservoir boxes", use_container_width=True)
+    g3.image(str(PH / "IMG_2586.jpg"), caption="Anteroom with sink, looking into the grow room", use_container_width=True)
+    st.caption("Model parameters of the what-if layer are schematic until calibrated with PPFD, LED and harvest measurements. Photos: site survey 13 Sep 2026.")
+
 # ============================================================================ LIVE
-if page == "Live":
-    st.title("Live — latest values in the twin")
-    top = st.columns([1, 1, 1, 3])
-    auto = top[0].toggle("auto-refresh (60 s)", value=True)
-    if top[1].button("refresh now"):
+elif page == "Live":
+    top = st.columns([2.2, 1, 1, 1.2])
+    top[0].title("Live")
+    auto = top[1].toggle("auto-refresh 60 s", value=True)
+    if top[2].button("refresh now"):
         live_snapshot.clear(); recent_window.clear()
-    hours = top[2].selectbox("chart window", [6, 12, 24, 72, 168], index=2, format_func=lambda h: f"{h} h" if h < 48 else f"{h // 24} days")
+    hours = top[3].selectbox("window", [6, 12, 24, 72, 168], index=2, format_func=lambda h: f"{h} h" if h < 48 else f"{h // 24} days")
 
     @st.fragment(run_every="60s" if auto else None)
     def live_view():
+        # ---- latest state (for the status line and the 3-D twin)
         try:
             state, table = live_snapshot(int(time.time() // 60))
         except Exception as e:  # network / ThingsBoard down -> fall back to the last stored bin
@@ -202,15 +237,11 @@ if page == "Live":
             state, table = tw.state(d1), None
         ages = table.groupby("device")["age"].min().to_dict() if table is not None else None
         row = table["value"] if table is not None else tw.data.loc[state.time]
-        st.subheader(f"{state.time:%Y-%m-%d %H:%M:%S} (Asia/Bangkok)")
-        state_cards(state, ages, row)
-        if ages and any(a > pd.Timedelta("30min") for a in ages.values()):
-            stale = ", ".join(f"{d} ({age_text(a)})" for d, a in ages.items() if a > pd.Timedelta("30min"))
-            st.warning(f"stale devices: {stale} — values older than 24 h are hidden from the twin")
-        lo, hi = RANGES[var]
-        st.plotly_chart(tw.figure_3d(var=var, st=state, cmin=lo, cmax=hi, height=650, title_prefix="LIVE ", public=not extended), **PLOTLY)
-        # ---- charts like the ThingsBoard dashboard (real-time window, 5-min averages) ----
-        st.markdown(f"#### Dashboard charts — last {hours} h (same window and 5-min averaging as ThingsBoard)")
+        stale = [f"{d} {age_text(a)}" for d, a in (ages or {}).items() if a > pd.Timedelta("30min")]
+        st.caption(f"**{state.time:%Y-%m-%d %H:%M:%S}** Asia/Bangkok · " + " · ".join(f"{d} {age_text(a)} ago" for d, a in (ages or {}).items())
+                   + (f" · ⚠ stale: {', '.join(stale)}" if stale else ""))
+
+        # ---- charts first (same window and 5-min averaging as the ThingsBoard dashboard)
         try:
             R = recent_window(hours, int(time.time() // 60))
         except Exception as e:
@@ -220,19 +251,28 @@ if page == "Live":
         else:
             ch = [f"gw.xy_md_{a}_t" for a in (20, 24, 21, 22, 23)]
             c1, c2 = st.columns(2)
-            c1.plotly_chart(ts_chart(R, ch, "Temperature (XY-MD02 ×5)", "°C"), use_container_width=True, key="ts_T")
-            c2.plotly_chart(ts_chart(R, [k[:-2] + "_h" for k in ch], "Humidity (XY-MD02 ×5)", "% RH"), use_container_width=True, key="ts_RH")
+            c1.plotly_chart(ts_chart(R, ch, "Temperature — 5 × XY-MD02 (°C)", "°C"), use_container_width=True, key="ts_T")
+            c2.plotly_chart(ts_chart(R, [k[:-2] + "_h" for k in ch], "Humidity — 5 × XY-MD02 (% RH)", "% RH"), use_container_width=True, key="ts_RH")
             c1, c2 = st.columns(2)
-            c1.plotly_chart(ts_chart(R, ["co2.CO2"], "CO₂", "ppm"), use_container_width=True, key="ts_co2")
-            c2.plotly_chart(ts_chart(R, ["co2.VPD", "co2.VOC"], "VPD / VOC (CO₂ controller)", ""), use_container_width=True, key="ts_vpd")
+            c1.plotly_chart(ts_chart(R, ["co2.CO2"], f"CO₂ (ppm) — {stat_line(R.get('co2.CO2', pd.Series(dtype=float)), 0)}", "ppm"), use_container_width=True, key="ts_co2")
+            c2.plotly_chart(ts_chart(R, ["co2.VPD", "co2.VOC"], "VPD (kPa) / VOC — CO₂ controller", ""), use_container_width=True, key="ts_vpd")
             for dev, nm in (("gc1", "Grow controller gc1 — growing stage, 200 L tank"), ("gc2", "Grow controller gc2 — nursery 2, 100 L tank")):
                 st.markdown(f"**{nm}**")
                 c1, c2, c3 = st.columns([2, 2, 1.4])
-                c1.plotly_chart(ts_chart(R, [f"{dev}.ec"], f"EC — {stat_line(R.get(f'{dev}.ec', pd.Series(dtype=float)))}", "mS/cm", setpoints={f"{dev}.ecSetPoint": "EC set-point"}), use_container_width=True, key=f"ts_ec_{dev}")
-                c2.plotly_chart(ts_chart(R, [f"{dev}.ph"], f"pH — {stat_line(R.get(f'{dev}.ph', pd.Series(dtype=float)))}", "pH", setpoints={f"{dev}.pHSetPoint": "pH set-point"}), use_container_width=True, key=f"ts_ph_{dev}")
+                c1.plotly_chart(ts_chart(R, [f"{dev}.ec"], f"EC (mS/cm) — {stat_line(R.get(f'{dev}.ec', pd.Series(dtype=float)))}", "mS/cm", setpoints={f"{dev}.ecSetPoint": "set-point"}), use_container_width=True, key=f"ts_ec_{dev}")
+                c2.plotly_chart(ts_chart(R, [f"{dev}.ph"], f"pH — {stat_line(R.get(f'{dev}.ph', pd.Series(dtype=float)))}", "pH", setpoints={f"{dev}.pHSetPoint": "set-point"}), use_container_width=True, key=f"ts_ph_{dev}")
                 c3.plotly_chart(dose_chart(R, dev, height=280), use_container_width=True, key=f"dose_{dev}")
             if extended:
                 st.plotly_chart(ts_chart(R, ["gc1.led", "gc1.pwmWater", "gc2.pwmWater", "co2.Relay_co2"], "LED / circulation pumps / CO₂ valve (beyond the dashboard)", "on = 1", step=True, height=220), use_container_width=True, key="ts_ctrl")
+
+        # ---- the twin itself
+        st.markdown("#### 3-D twin — coloured by the latest readings")
+        lo, hi = RANGES[var]
+        st.plotly_chart(tw.figure_3d(var=var, st=state, cmin=lo, cmax=hi, height=620, title_prefix="LIVE ", public=not extended), **PLOTLY)
+
+        # ---- details, collapsed (the charts already show the numbers)
+        with st.expander("current values as cards" + (" + controller state / dosing configuration" if extended else "")):
+            state_cards(state, None, row)
         with st.expander("latest values — all keys" if extended else "latest values — dashboard keys"):
             if table is not None:
                 t2 = table if extended else table[table.index.isin(tb.DASHBOARD_COLUMNS)]
@@ -290,7 +330,8 @@ elif page == "History":
     idx = hist.index
     pick = st.slider("time", min_value=idx[0].to_pydatetime(), max_value=idx[-1].to_pydatetime(), value=idx[-1].to_pydatetime(), step=pd.Timedelta("10min").to_pytimedelta(), format="DD MMM HH:mm")
     state = tw.state(pd.Timestamp(pick))
-    state_cards(state, row=hist.loc[state.time] if state.time in hist.index else None)
+    with st.expander(f"values at {state.time:%Y-%m-%d %H:%M} as cards"):
+        state_cards(state, row=hist.loc[state.time] if state.time in hist.index else None)
     lo, hi = RANGES[var]
     st.plotly_chart(tw.figure_3d(var=var, st=state, cmin=lo, cmax=hi, height=600, public=not extended), **PLOTLY)
 
