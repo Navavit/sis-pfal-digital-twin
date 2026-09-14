@@ -26,7 +26,7 @@ sys.path.insert(0, str(ROOT))
 import os  # noqa: E402
 os.environ["PYTHONPATH"] = str(ROOT) + os.pathsep + os.environ.get("PYTHONPATH", "")
 NEEDS_PKG = "2026.09.15.1"
-APP_BUILD = "2026-09-15 c"          # shown in the footer so everyone can tell which version is running
+APP_BUILD = "2026-09-15 d"          # shown in the footer so everyone can tell which version is running
 import pfal_twin  # noqa: E402
 if getattr(pfal_twin, "__version__", "") != NEEDS_PKG:
     for _m in [m for m in sys.modules if m == "pfal_twin" or m.startswith("pfal_twin.")]:
@@ -133,6 +133,31 @@ def dose_chart(df, dev, height=220):
 
 def stat_line(d, nd=2):
     d = d.dropna(); return f"now {d.iloc[-1]:.{nd}f} · min {d.min():.{nd}f} · avg {d.mean():.{nd}f} · max {d.max():.{nd}f}" if d.size else "no data"
+
+
+@st.cache_data(show_spinner=False)
+def availability_figure(version: str):
+    """Per-device data coverage per day (share of 10-min bins with at least one value) -> shows the gaps at a glance."""
+    import plotly.graph_objects as go
+    w = get_twin(version).data
+    w = w[[c for c in w.columns if c.split(".", 1)[1] not in tb.CONTROL_KEYS]]     # measured keys only (control keys are forward-filled)
+    av = tb.availability(w, "1D")
+    order = [d for d in ("gw", "gc1", "gc2", "co2") if d in av.columns]
+    label = {"gw": "gw — XY-MD02 T/RH ×5", "gc1": "gc1 — growing controller", "gc2": "gc2 — nursery-2 controller", "co2": "co2 — CO₂ controller"}
+    fig = go.Figure(go.Heatmap(z=av[order].T.values * 100, x=av.index, y=[label[d] for d in order], colorscale=[[0, "#f2f2f2"], [0.01, "#fde0c8"], [1, "#1f6f6b"]],
+                               zmin=0, zmax=100, colorbar=dict(title="% of day", thickness=12, len=0.9), hovertemplate="%{y}<br>%{x|%d %b %Y}: %{z:.0f} % of the day<extra></extra>"))
+    fig.update_layout(height=190, margin=dict(l=10, r=10, t=10, b=30), yaxis=dict(autorange="reversed"), font=dict(size=11))
+    return fig
+
+
+@st.cache_data(show_spinner=False)
+def full_store_bytes(version: str, fmt: str) -> bytes:
+    """Whole 10-min table as CSV or Parquet for the download buttons (cached per store version)."""
+    import io as _io
+    w = get_twin(version).data
+    if fmt == "parquet":
+        b = _io.BytesIO(); w.to_parquet(b); return b.getvalue()
+    return w.to_csv(float_format="%.3f").encode()
 
 
 @st.cache_resource(show_spinner="rendering layout ...")
@@ -310,6 +335,20 @@ elif page == "Live":
 # ============================================================================ HISTORY
 elif page == "History":
     st.title("History — browse the stored 10-min data")
+    days = (d1 - d0).days
+    _lm = (st.session_state.get("store_status") or {}).get("local") or {}
+    upd = f" · store updated {pd.Timestamp(_lm['updated_at']).tz_convert(TZ):%d %b %Y %H:%M}" if _lm.get("updated_at") else ""
+    st.markdown(f"**ข้อมูลมีตั้งแต่ · data available from {d0:%d %b %Y %H:%M} → {d1:%d %b %Y %H:%M}** ({days} days, {len(tw.data):,} × 10-min bins, {tw.data.shape[1]} columns){upd}  \n"
+                "Refreshed from ThingsBoard by GitHub Actions every 30 min; grey days below = the device sent nothing that day.")
+    st.plotly_chart(availability_figure(STORE_VERSION), use_container_width=True, key="availability")
+    with st.expander("⬇ download the whole store · ดาวน์โหลดข้อมูลทั้งหมด"):
+        st.markdown("Columns are `device.key` (e.g. `gw.xy_md_21_t` = temperature of XY-MD02 unit 21, `gc1.ec` = EC of the growing-stage controller); "
+                    "time index is Asia/Bangkok; see [docs/DATA_DICTIONARY.md](https://github.com/Navavit/sis-pfal-digital-twin/blob/main/docs/DATA_DICTIONARY.md).")
+        b1, b2, b3 = st.columns(3)
+        b1.download_button("10-min table — CSV", full_store_bytes(STORE_VERSION, "csv"), file_name=f"sis_pfal_10min_{d0:%Y%m%d}_{d1:%Y%m%d}.csv", mime="text/csv", use_container_width=True)
+        b2.download_button("10-min table — Parquet", full_store_bytes(STORE_VERSION, "parquet"), file_name=f"sis_pfal_10min_{d0:%Y%m%d}_{d1:%Y%m%d}.parquet", mime="application/octet-stream", use_container_width=True)
+        b3.link_button("raw samples — Parquet on GitHub (13 MB)", f"https://github.com/{store.REPO}/raw/{store.BRANCH}/data/raw/iot/thingsboard_long.parquet", use_container_width=True)
+        st.caption(f"Same files on GitHub, branch `{store.BRANCH}`: https://github.com/{store.REPO}/tree/{store.BRANCH}")
     c = st.columns([1, 1, 1, 2])
     start = c[0].date_input("from", value=(d1 - pd.Timedelta(days=7)).date(), min_value=d0.date(), max_value=d1.date())
     end = c[1].date_input("to", value=d1.date(), min_value=d0.date(), max_value=d1.date())

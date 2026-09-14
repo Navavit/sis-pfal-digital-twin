@@ -27,6 +27,15 @@ dashboard เดิมบอกได้ว่า *ตัวเลขตอน�
 - **ประวัติ**: GitHub Actions ดึงข้อมูลใหม่จาก ThingsBoard **ทุก 30 นาที** แล้วเก็บไว้ที่ branch [`data`](../../tree/data) ของ repo นี้ (ตาราง 10 นาทีตั้งแต่ 26 ธ.ค. 2025 + ข้อมูลดิบ) — แอปตรวจของใหม่ทุก 10 นาที
 - **รูปทรงห้อง**: จากการสแกน LiDAR หน้างาน 13 ก.ย. 2026 (ไฟล์สแกนและภาพถ่ายไม่อยู่ใน repo)
 
+## ดาวน์โหลดข้อมูล
+ข้อมูลทั้งหมดเปิดให้ดาวน์โหลด (อัปเดตทุก 30 นาที) — ตั้งแต่ **26 ธ.ค. 2025** ถึงปัจจุบัน
+| ไฟล์ | เนื้อหา |
+|---|---|
+| [iot_10min.parquet](../../raw/data/data/processed/iot_10min.parquet) | ตาราง 10 นาที ทุกตัวแปร (≈2 MB) — หรือกด "download the whole store" ในหน้า History ของแอปเพื่อรับเป็น CSV |
+| [thingsboard_long.parquet](../../raw/data/data/raw/iot/thingsboard_long.parquet) | ข้อมูลดิบทุกตัวอย่างตามที่อุปกรณ์ส่ง (≈13 MB) |
+| [store_manifest.json](../../raw/data/data/processed/store_manifest.json) | เวลาอัปเดตล่าสุดและช่วงข้อมูล |
+| [docs/DATA_DICTIONARY.md](docs/DATA_DICTIONARY.md) | ความหมายของทุกคอลัมน์ |
+
 ## รันเองในเครื่อง
 ```bash
 pip install -r requirements.txt
