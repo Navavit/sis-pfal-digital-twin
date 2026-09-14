@@ -255,9 +255,10 @@ class DigitalTwin:
                                         colorbar=dict(title=var + unit, x=1.0, len=0.5)))
 
     def figure_3d(self, t=None, var="T", cmin=20, cmax=35, show_cloud=False, height=720, st: TwinState | None = None, title_prefix="",
-                  pipes=False, compact=True):
+                  pipes=False, compact=True, public=False):
         """Plotly 3-D twin at time t (or at a given TwinState, e.g. from live()): rack coloured by the room mean, XY-MD02 units by value.
-        pipes=True also draws the pipework (solid = pump running); compact=True -> grouped legend under the scene."""
+        pipes=True also draws the pipework (solid = pump running); compact=True -> grouped legend under the scene;
+        public=True -> title limited to what the public ThingsBoard dashboard shows (no LED / pump state)."""
         if st is None:
             st = self.state(t if t is not None else self.warmest_moment())
         unit = {"T": " °C", "RH": " %", "VPD": " kPa"}[var]
@@ -276,7 +277,7 @@ class DigitalTwin:
         pump_txt = "pumps: " + ", ".join(f"{'growing' if lp == 'gc1' else 'nursery-2'} {'ON' if v else 'off'}" for lp, v in st.pump_on.items())
         line1 = f"{title_prefix}{st.time:%Y-%m-%d %H:%M} — room {var} = mean of 3 wall sensors ({cmin}–{cmax}{unit}); anteroom {st.ch_T['xy_md_20']:.1f} °C, outside {st.ch_T['xy_md_24']:.1f} °C"
         line2 = (f"CO₂ {st.co2:.0f} ppm | EC growing {st.ec['growing (gc1)']:.2f} / nursery-2 {st.ec['nursery-2 (gc2)']:.2f} | "
-                 f"pH {st.ph['growing (gc1)']:.2f} / {st.ph['nursery-2 (gc2)']:.2f} | {led_txt} | {pump_txt}")
+                 f"pH {st.ph['growing (gc1)']:.2f} / {st.ph['nursery-2 (gc2)']:.2f}" + ("" if public else f" | {led_txt} | {pump_txt}"))
         title = f"{line1}<br><span style='font-size:0.85em'>{line2}</span>" if compact else f"{line1} | {line2}"
         return viz.figure_3d(tr, title=title, height=height, compact=compact)
 

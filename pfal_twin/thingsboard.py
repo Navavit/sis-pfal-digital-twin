@@ -45,7 +45,12 @@ DEVICES = {
 GC_KEYS = ["ec", "ph", "waterTemperature", "ambTemperature", "ambHumidity",
            "led", "currentStageBrightness1", "currentStageBrightness2", "currentStageBrightness3", "currentStageBrightness4",
            "pumpA", "pumpB", "pumpPH", "pwmWater", "mode", "stage", "plantDay",
-           "ecSetPoint", "pHSetPoint", "alarmEC", "ecDosingCount", "pHDosingCount"]
+           "ecSetPoint", "pHSetPoint", "alarmEC", "ecDosingCount", "pHDosingCount",
+           # extended (not on the public dashboard, added 2026-09-14): dosing configuration, pump modes, controller health
+           "task", "aDosingTime", "bDosingTime", "pHDosingTime", "ecWaiting", "pHWaiting",
+           "pumpASpeed", "pumpBSpeed", "pumpPHSpeed", "modePumpA", "modePumpB", "modePumpPH", "modePumpWater", "pumpTypeEnable",
+           "ecStamp", "pHStamp", "upTime"]
+EXTENDED_KEYS = GC_KEYS[22:]
 KEYS = {
     "gw":  None,
     "gc1": GC_KEYS,
@@ -59,11 +64,41 @@ ENV_KEYS = {"xy_md_20_t", "xy_md_21_t", "xy_md_22_t", "xy_md_23_t", "xy_md_24_t"
             "waterLevel_1", "ec", "ph", "CO2", "temperature", "humidity", "VPD", "VOC", "pressure"}
 CONTROL_KEYS = {"led", "pumpA", "pumpB", "pumpPH", "pwmWater", "Relay_co2", "mode", "stage",
                 "currentStageBrightness1", "currentStageBrightness2", "currentStageBrightness3", "currentStageBrightness4",
-                "ecSetPoint", "pHSetPoint", "plantDay", "alarmEC", "ecDosingCount", "pHDosingCount"}
+                "ecSetPoint", "pHSetPoint", "plantDay", "alarmEC", "ecDosingCount", "pHDosingCount",
+                "task", "aDosingTime", "bDosingTime", "pHDosingTime", "ecWaiting", "pHWaiting",
+                "pumpASpeed", "pumpBSpeed", "pumpPHSpeed", "modePumpA", "modePumpB", "modePumpPH", "modePumpWater", "pumpTypeEnable",
+                "ecStamp", "pHStamp", "upTime"}
+# human labels for the extended keys (web app / notebooks)
+KEY_LABELS = {
+    "task": "controller task", "stage": "growth stage", "mode": "controller mode", "plantDay": "plant day",
+    "aDosingTime": "part-A dose (s per shot)", "bDosingTime": "part-B dose (s per shot)", "pHDosingTime": "acid dose (s per shot)",
+    "ecWaiting": "wait between EC doses (s)", "pHWaiting": "wait between pH doses (s)",
+    "pumpASpeed": "pump A speed (%)", "pumpBSpeed": "pump B speed (%)", "pumpPHSpeed": "pump pH speed (%)",
+    "modePumpA": "pump A mode", "modePumpB": "pump B mode", "modePumpPH": "pump pH mode", "modePumpWater": "circulation pump mode",
+    "pumpTypeEnable": "pump type enable", "ecStamp": "EC at last dose", "pHStamp": "pH at last dose", "upTime": "controller uptime",
+    "ecDosingCount": "EC doses (count)", "pHDosingCount": "pH doses (count)", "pwmWater": "circulation pump", "led": "LED",
+    "waterTemperature": "water temperature (probe)", "ambTemperature": "controller ambient T", "ambHumidity": "controller ambient RH",
+    "Relay_co2": "CO₂ valve relay", "waterLevel_1": "water level sensor",
+}
+PUMP_MODE = {0: "off", 1: "manual", 2: "auto"}
 
 # which controller drives which nutrient loop (site-confirmed 2026-09-14; the dashboard block titles are misleading)
 LOOPS = {"growing": "gc1", "nursery2": "gc2", "nursery1": None}
 LOOP_LABEL = {"gc1": "growing stage (tiers 2-5, 200 L)", "gc2": "nursery 2 (T1-N2, 100 L)", "n1": "nursery 1 (T1-N1, no controller)"}
+
+# Exactly what the public ThingsBoard dashboard "Vertical Smart Farming" displays (widget datasources, checked 2026-09-14).
+# The public web app must not show more than this; everything else stays in the local notebooks.
+DASHBOARD_COLUMNS = (
+    [f"gw.xy_md_{a}_{v}" for a in (20, 21, 22, 23, 24) for v in ("t", "h")]
+    + ["co2.CO2", "co2.VPD", "co2.VOC"]
+    + [f"{d}.{k}" for d in ("gc1", "gc2") for k in ("ec", "ph", "ecSetPoint", "pHSetPoint", "task", "pumpA", "pumpB", "pumpPH")]
+)
+
+
+def public_columns(df: pd.DataFrame) -> pd.DataFrame:
+    """Keep only the columns the public dashboard shows."""
+    return df[[c for c in DASHBOARD_COLUMNS if c in df.columns]]
+
 
 LONG_PARQUET = IOT_RAW / "thingsboard_long.parquet"
 WIDE_PARQUET = PROCESSED / "iot_10min.parquet"
@@ -181,6 +216,17 @@ def update_store(client: Client, path: Path = LONG_PARQUET, backfill_from="2025-
     allf = new if old is None else pd.concat([old, new], ignore_index=True)
     allf = allf.drop_duplicates(["ts", "device", "key"]).sort_values(["device", "key", "ts"]).reset_index(drop=True)
     path.parent.mkdir(parents=True, exist_ok=True)
+    allf.to_parquet(path, index=False)
+    return allf
+
+
+def backfill_keys(client: Client, keys_by_device: dict, path: Path = LONG_PARQUET, start="2025-12-20", verbose=True) -> pd.DataFrame:
+    """Download the full history of keys that were added to KEYS later, and merge them into the store."""
+    old = load_long(path) if path.exists() else None
+    devs = {a: DEVICES[a] for a in keys_by_device}
+    new = fetch_history(client, start, devices=devs, keys=keys_by_device, verbose=verbose)
+    allf = new if old is None else pd.concat([old, new], ignore_index=True)
+    allf = allf.drop_duplicates(["ts", "device", "key"]).sort_values(["device", "key", "ts"]).reset_index(drop=True)
     allf.to_parquet(path, index=False)
     return allf
 

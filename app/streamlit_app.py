@@ -68,23 +68,39 @@ def age_text(td: pd.Timedelta) -> str:
     return f"{s} s" if s < 90 else f"{s // 60} min" if s < 5400 else f"{s / 3600:.1f} h" if s < 172800 else f"{s / 86400:.1f} d"
 
 
-def state_cards(state, ages: dict | None = None):
-    """Three rows of metric cards for one TwinState."""
+def state_cards(state, ages: dict | None = None, row=None):
+    """Metric cards — limited to what the public ThingsBoard dashboard shows (T/RH per unit, CO₂, VPD, VOC, EC/pH + setpoints)."""
+    g = lambda k: (float(row.get(k, float("nan"))) if row is not None else float("nan"))
     c = st.columns(6)
     c[0].metric("Room T (mean of 3 walls)", fmt(state.room_T, 1, " °C"))
     c[1].metric("Room RH", fmt(state.room_RH, 0, " %"))
-    c[2].metric("Room VPD", fmt(state.room_VPD, 2, " kPa"))
+    c[2].metric("Room VPD (from T/RH)", fmt(state.room_VPD, 2, " kPa"))
     c[3].metric("CO₂", fmt(state.co2, 0, " ppm"))
-    c[4].metric("Anteroom (ch 20)", fmt(state.ch_T["xy_md_20"], 1, " °C"))
-    c[5].metric("Outside (ch 24)", fmt(state.ch_T["xy_md_24"], 1, " °C"))
+    c[4].metric("Anteroom (ch 20)", fmt(state.ch_T["xy_md_20"], 1, " °C"), fmt(state.ch_RH["xy_md_20"], 0, " % RH"), delta_color="off")
+    c[5].metric("Outside (ch 24)", fmt(state.ch_T["xy_md_24"], 1, " °C"), fmt(state.ch_RH["xy_md_24"], 0, " % RH"), delta_color="off")
     c = st.columns(6)
-    c[0].metric("EC growing (gc1, 200 L)", fmt(state.ec["growing (gc1)"], 2, " mS/cm"))
-    c[1].metric("pH growing", fmt(state.ph["growing (gc1)"], 2))
-    c[2].metric("EC nursery-2 (gc2, 100 L)", fmt(state.ec["nursery-2 (gc2)"], 2, " mS/cm"))
-    c[3].metric("pH nursery-2", fmt(state.ph["nursery-2 (gc2)"], 2))
-    led = "—" if state.led != state.led else ("ON" if state.led >= 0.5 else "off")
-    c[4].metric("LED (gc1)", led, help="brightness ch1–4: " + " / ".join(fmt(b, 0) for b in state.brightness) + " %")
-    c[5].metric("Pumps", "grow " + ("ON" if state.pump_on["gc1"] else "off") + " · nur-2 " + ("ON" if state.pump_on["gc2"] else "off"))
+    c[0].metric("EC growing (gc1, 200 L)", fmt(state.ec["growing (gc1)"], 2, " mS/cm"), "set " + fmt(g("gc1.ecSetPoint"), 2), delta_color="off")
+    c[1].metric("pH growing", fmt(state.ph["growing (gc1)"], 2), "set " + fmt(g("gc1.pHSetPoint"), 2), delta_color="off")
+    c[2].metric("EC nursery-2 (gc2, 100 L)", fmt(state.ec["nursery-2 (gc2)"], 2, " mS/cm"), "set " + fmt(g("gc2.ecSetPoint"), 2), delta_color="off")
+    c[3].metric("pH nursery-2", fmt(state.ph["nursery-2 (gc2)"], 2), "set " + fmt(g("gc2.pHSetPoint"), 2), delta_color="off")
+    c[4].metric("VOC (CO₂ controller)", fmt(g("co2.VOC"), 0))
+    c[5].metric("VPD (CO₂ controller)", fmt(state.co2_VPD, 2, " kPa"))
+    if extended:
+        st.markdown("<small>**Beyond the ThingsBoard dashboard** — controller state, lighting, dosing configuration</small>", unsafe_allow_html=True)
+        c = st.columns(6)
+        led = "—" if state.led != state.led else ("ON" if state.led >= 0.5 else "off")
+        c[0].metric("LED (gc1)", led, "brightness " + "/".join(fmt(b, 0) for b in state.brightness) + " %", delta_color="off")
+        c[1].metric("Circulation pumps", "grow " + ("ON" if state.pump_on["gc1"] else "off") + " · nur-2 " + ("ON" if state.pump_on["gc2"] else "off"),
+                    "mode " + tb.PUMP_MODE.get(g("gc1.modePumpWater"), "—") + " / " + tb.PUMP_MODE.get(g("gc2.modePumpWater"), "—"), delta_color="off")
+        c[2].metric("Plant day", fmt(state.plant_day["growing (gc1)"], 0) + " / " + fmt(state.plant_day["nursery-2 (gc2)"], 0),
+                    "task " + fmt(g("gc1.task"), 0) + " / " + fmt(g("gc2.task"), 0) + " · stage " + fmt(g("gc1.stage"), 0) + " / " + fmt(g("gc2.stage"), 0), delta_color="off")
+        c[3].metric("Dosing gc1 (A / B / acid)", f"{fmt(g('gc1.aDosingTime'), 0)} / {fmt(g('gc1.bDosingTime'), 0)} / {fmt(g('gc1.pHDosingTime'), 0)} s",
+                    f"wait {fmt(g('gc1.ecWaiting'), 0)} s · speed {fmt(g('gc1.pumpASpeed'), 0)} % · shots {fmt(g('gc1.ecDosingCount'), 0)}", delta_color="off")
+        c[4].metric("Dosing gc2 (A / B / acid)", f"{fmt(g('gc2.aDosingTime'), 0)} / {fmt(g('gc2.bDosingTime'), 0)} / {fmt(g('gc2.pHDosingTime'), 0)} s",
+                    f"wait {fmt(g('gc2.ecWaiting'), 0)} s · speed {fmt(g('gc2.pumpASpeed'), 0)} % · shots {fmt(g('gc2.ecDosingCount'), 0)}", delta_color="off")
+        up1, up2 = g("gc1.upTime") / 3.6e9, g("gc2.upTime") / 3.6e9        # µs -> h
+        c[5].metric("Controller uptime gc1 / gc2", f"{fmt(up1, 1)} / {fmt(up2, 1)} h",
+                    f"CO₂ valve {'ON' if g('co2.Relay_co2') >= 0.5 else 'off' if g('co2.Relay_co2') == g('co2.Relay_co2') else '—'} · amb T {fmt(g('gc1.ambTemperature'), 1)} °C", delta_color="off")
     if ages:
         st.caption("last message per device: " + " · ".join(f"**{d}** {age_text(a)} ago" for d, a in ages.items()))
 
@@ -95,6 +111,8 @@ st.sidebar.markdown(f"**{PROJECT['name']}**  \n<small>{PROJECT['th']}</small>", 
 page = st.sidebar.radio("Page", ["Live", "History", "Layout & water", "What-if"], label_visibility="collapsed")
 var = st.sidebar.selectbox("3-D colour variable", ["T", "RH", "VPD"], format_func=lambda v: {"T": "air temperature", "RH": "relative humidity", "VPD": "VPD"}[v])
 RANGES = {"T": (20, 35), "RH": (40, 95), "VPD": (0.2, 2.0)}
+extended = st.sidebar.toggle("show more than the ThingsBoard dashboard", value=True,
+                             help="off = only the keys the public dashboard shows; on = also LED, pumps, dosing configuration, controller health, derived values")
 d0, d1 = tw.data_span()
 st.sidebar.markdown(f"**Local store**  \n{d0:%Y-%m-%d} → {d1:%Y-%m-%d %H:%M}  \n{len(tw.data):,} × 10-min bins")
 if st.sidebar.button("⬇ Pull new data from ThingsBoard", help="incremental download since the last stored sample, then rebuild the 10-min table"):
@@ -123,17 +141,20 @@ if page == "Live":
             st.error(f"ThingsBoard not reachable ({e}); showing the last stored 10-min bin instead.")
             state, table = tw.state(d1), None
         ages = table.groupby("device")["age"].min().to_dict() if table is not None else None
+        row = table["value"] if table is not None else tw.data.loc[state.time]
         st.subheader(f"{state.time:%Y-%m-%d %H:%M:%S} (Asia/Bangkok)")
-        state_cards(state, ages)
+        state_cards(state, ages, row)
         if ages and any(a > pd.Timedelta("30min") for a in ages.values()):
             stale = ", ".join(f"{d} ({age_text(a)})" for d, a in ages.items() if a > pd.Timedelta("30min"))
             st.warning(f"stale devices: {stale} — values older than 24 h are hidden from the twin")
         lo, hi = RANGES[var]
-        st.plotly_chart(tw.figure_3d(var=var, st=state, cmin=lo, cmax=hi, height=650, title_prefix="LIVE "), **PLOTLY)
-        with st.expander("all latest keys (raw from ThingsBoard)"):
+        st.plotly_chart(tw.figure_3d(var=var, st=state, cmin=lo, cmax=hi, height=650, title_prefix="LIVE ", public=not extended), **PLOTLY)
+        with st.expander("latest values — all keys" if extended else "latest values — dashboard keys"):
             if table is not None:
-                t2 = table.copy(); t2["age"] = t2["age"].map(age_text); t2["ts"] = t2["ts"].dt.strftime("%Y-%m-%d %H:%M:%S")
-                st.dataframe(t2, width="stretch", height=420)
+                t2 = table if extended else table[table.index.isin(tb.DASHBOARD_COLUMNS)]
+                t2 = t2.copy(); t2["age"] = t2["age"].map(age_text); t2["ts"] = t2["ts"].dt.strftime("%Y-%m-%d %H:%M:%S")
+                t2.insert(0, "meaning", [tb.KEY_LABELS.get(k, "") for k in t2["key"]]); t2["on dashboard"] = t2.index.isin(tb.DASHBOARD_COLUMNS)
+                st.dataframe(t2[["meaning", "value", "ts", "age", "on dashboard"]], width="stretch", height=480)
 
     live_view()
 
@@ -151,11 +172,33 @@ elif page == "History":
         "CO₂ (ppm)": ["co2.CO2"],
         "EC (mS/cm)": ["gc1.ec", "gc1.ecSetPoint", "gc2.ec", "gc2.ecSetPoint"],
         "pH": ["gc1.ph", "gc1.pHSetPoint", "gc2.ph", "gc2.pHSetPoint"],
-        "Water temperature (°C)": ["gc1.waterTemperature", "gc2.waterTemperature"],
-        "LED / pump / CO₂ relay (0–1)": ["gc1.led", "gc1.pwmWater", "gc2.pwmWater", "co2.Relay_co2"],
+        "VOC (CO₂ controller)": ["co2.VOC"],
+        "Dosing pumps A / B / pH (0–1)": ["gc1.pumpA", "gc1.pumpB", "gc1.pumpPH", "gc2.pumpA", "gc2.pumpB", "gc2.pumpPH"],
     }
+    if extended:
+        groups.update({
+            "LED / circulation pump / CO₂ valve (0–1)": ["gc1.led", "gc1.pwmWater", "gc2.pwmWater", "co2.Relay_co2"],
+            "LED brightness ch1–4 (%)": [f"gc1.currentStageBrightness{i}" for i in range(1, 5)],
+            "Dose shots per day (derived from the counters)": ["derived.gc1_ec_shots", "derived.gc1_ph_shots", "derived.gc2_ec_shots", "derived.gc2_ph_shots"],
+            "Dosing configuration (s per shot / wait s)": ["gc1.aDosingTime", "gc1.bDosingTime", "gc1.pHDosingTime", "gc1.ecWaiting", "gc2.aDosingTime", "gc2.bDosingTime", "gc2.pHDosingTime", "gc2.ecWaiting"],
+            "Pump modes (0 off / 1 manual / 2 auto)": ["gc1.modePumpA", "gc1.modePumpB", "gc1.modePumpPH", "gc1.modePumpWater", "gc2.modePumpA", "gc2.modePumpWater"],
+            "Controller ambient T / RH (inside the box)": ["gc1.ambTemperature", "gc1.ambHumidity", "gc2.ambTemperature", "gc2.ambHumidity"],
+            "Controller uptime (h) — drops = reboot": ["derived.gc1_uptime_h", "derived.gc2_uptime_h"],
+            "CO₂ controller T / RH / pressure": ["co2.temperature", "co2.humidity", "co2.pressure"],
+            "Plant day / task / stage": ["gc1.plantDay", "gc2.plantDay", "gc1.task", "gc2.task", "gc1.stage", "gc2.stage"],
+        })
     chosen = c[3].multiselect("series", list(groups), default=list(groups)[:2])
     hist = tw.history(pd.Timestamp(start), pd.Timestamp(end) + pd.Timedelta(days=1), freq=None)
+    if extended:
+        for d in ("gc1", "gc2"):        # derived series
+            for k, nm in (("ecDosingCount", "ec_shots"), ("pHDosingCount", "ph_shots")):
+                if f"{d}.{k}" in hist:
+                    daily = hist[f"{d}.{k}"].resample("1D").max().diff().clip(lower=0)
+                    hist[f"derived.{d}_{nm}"] = daily.reindex(hist.index, method="ffill")
+            if f"{d}.upTime" in hist:
+                hist[f"derived.{d}_uptime_h"] = hist[f"{d}.upTime"] / 3.6e9
+    else:
+        hist = tb.public_columns(hist)
     if hist.empty:
         st.info("no data in this range"); st.stop()
 
@@ -163,9 +206,9 @@ elif page == "History":
     idx = hist.index
     pick = st.slider("time", min_value=idx[0].to_pydatetime(), max_value=idx[-1].to_pydatetime(), value=idx[-1].to_pydatetime(), step=pd.Timedelta("10min").to_pytimedelta(), format="DD MMM HH:mm")
     state = tw.state(pd.Timestamp(pick))
-    state_cards(state)
+    state_cards(state, row=hist.loc[state.time] if state.time in hist.index else None)
     lo, hi = RANGES[var]
-    st.plotly_chart(tw.figure_3d(var=var, st=state, cmin=lo, cmax=hi, height=600), **PLOTLY)
+    st.plotly_chart(tw.figure_3d(var=var, st=state, cmin=lo, cmax=hi, height=600, public=not extended), **PLOTLY)
 
     st.markdown("#### Time series")
     import plotly.graph_objects as go
@@ -174,7 +217,8 @@ elif page == "History":
         D = hist[cols].resample(freq).mean() if freq != "10min" else hist[cols]
         fig = go.Figure()
         for k in cols:
-            fig.add_scatter(x=D.index, y=D[k], mode="lines", name=k if not k.startswith("gw.") else tb.channel_label(k[3:-2]) + k[-2:], connectgaps=False)
+            lab = tb.channel_label(k[3:-2]) + k[-2:] if k.startswith("gw.") else (k.split(".")[0] + " " + tb.KEY_LABELS.get(k.split(".")[1], k.split(".")[1]))
+            fig.add_scatter(x=D.index, y=D[k], mode="lines", name=lab, connectgaps=False, line_shape="hv" if ("mode" in k or "Time" in k or "Waiting" in k or "shots" in k) else "linear")
         fig.add_vline(x=pd.Timestamp(pick), line_dash="dot", line_color="grey")
         fig.update_layout(title=g, height=300, margin=dict(l=40, r=20, t=40, b=30), legend=dict(orientation="h", y=-0.25), hovermode="x unified")
         st.plotly_chart(fig, use_container_width=True, key=f"ts_{g}")
