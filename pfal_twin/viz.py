@@ -96,7 +96,7 @@ def figure_3d(traces, title=None, height=800, compact=False):
                       legend=dict(itemsizing="constant"))
     if compact:
         fig.update_layout(legend=dict(orientation="h", yanchor="top", y=-0.01, xanchor="left", x=0, font=dict(size=10), itemwidth=30),
-                          title=dict(font=dict(size=13)), margin=dict(l=0, r=0, t=50, b=0))
+                          title=dict(font=dict(size=13), y=0.98, yanchor="top"), margin=dict(l=0, r=0, t=55, b=45))
     return fig
 
 
@@ -144,9 +144,10 @@ def equipment_traces(eq, opacity=0.5, group_legend=False):
     return tr
 
 
-def sensor_trace(sensors, text=None, size=7, color="#d62728", name="sensors"):
+def sensor_trace(sensors, text=None, size=7, color="#d62728", name="sensors", labels=True):
+    """labels=False -> markers only (names in the hover text) so co-located boxes do not print on top of each other."""
     txt = text if text is not None else sensors["sensor"].tolist()
-    return go.Scatter3d(x=sensors.x, y=sensors.y, z=sensors.z, mode="markers+text", text=sensors["sensor"], textposition="top center",
+    return go.Scatter3d(x=sensors.x, y=sensors.y, z=sensors.z, mode="markers+text" if labels else "markers", text=sensors["sensor"], textposition="top center",
                         hovertext=txt, hoverinfo="text", name=name,
                         marker=dict(size=size, color=color, symbol="diamond", line=dict(color="black", width=1)))
 
