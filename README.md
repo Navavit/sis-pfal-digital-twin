@@ -78,8 +78,8 @@ scripts/run_app.sh            # เปิด http://localhost:8501
 ```
 | หน้า | ทำอะไร |
 |---|---|
-| **Live** | ค่าล่าสุดจาก ThingsBoard ทุก 60 วิ (`twin.live()`) → การ์ดค่า + twin 3-D ระบายสีตามค่าจริง, บอกอายุข้อมูลรายอุปกรณ์ |
-| **History** | เลือกช่วงวัน/ความละเอียด → slider เวลาเลื่อนดู twin 3-D ณ เวลานั้น (`twin.state()`), กราฟอนุกรมเวลา, KPI, events, heat-map, ดาวน์โหลด CSV |
+| **Live** | ค่าล่าสุดจาก ThingsBoard ทุก 60 วิ (`twin.live()`) → การ์ดค่า + twin 3-D ระบายสีตามค่าจริง, บอกอายุข้อมูลรายอุปกรณ์ — แสดง **มากกว่า dashboard ของ ThingsBoard**: LED/ความสว่าง, ปั๊มเวียน+โหมด, plant day/task/stage, ค่าตั้งการจ่ายปุ๋ย (วินาที/ครั้ง, รอ, ความเร็ว, จำนวนครั้ง), uptime ของ controller, วาล์ว CO₂ (สวิตช์ "show more than the ThingsBoard dashboard" ปิดได้) |
+| **History** | เลือกช่วงวัน/ความละเอียด → slider เวลาเลื่อนดู twin 3-D ณ เวลานั้น (`twin.state()`), กราฟอนุกรมเวลา 17 กลุ่ม (รวมค่าอนุพันธ์: จำนวนครั้งจ่ายปุ๋ยต่อวัน, uptime → รีบูต), KPI, events, heat-map, ดาวน์โหลด CSV |
 | **Layout & water** | ผัง as-built, ผังระบบน้ำ, process flow, แอนิเมชันการไหล 3-D, ตารางอุปกรณ์/เซ็นเซอร์ |
 | **What-if** | slider สัดส่วนผัก → 700 หลุม 3-D + ตารางผลผลิต, ตาราง photoperiod × dimming |
 ปุ่ม "Pull new data" ใน sidebar = `twin.update_data()` (ดึงส่วนเพิ่มจาก ThingsBoard ลง Parquet ในเครื่อง)
