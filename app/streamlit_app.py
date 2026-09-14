@@ -212,9 +212,6 @@ Digital twin = แบบจำลองห้องปลูกจริง (ร
     f3.metric("Sensors / equipment", f"{len(tw.sensors)} / {len(tw.equipment)}", "5 × XY-MD02 T/RH, CO₂, 2 grow controllers", delta_color="off")
     f4.metric("IoT records", f"{len(tw.data):,} × 10 min", f"{d0:%d %b %Y} → {d1:%d %b %Y}", delta_color="off")
     f5.metric("Source", "ThingsBoard", "cat-smartgrow.com (Civic Agrotech)", delta_color="off")
-    g1, g2 = st.columns(2)
-    g1.image(str(PH / "IMG_2553.jpg"), caption="Porch: CO₂ cylinders, outdoor sensor and control box", use_container_width=True)
-    g2.image(str(PH / "IMG_2534.jpg"), caption="Tier 1: nursery trays and reservoir boxes", use_container_width=True)
     st.caption("Model parameters of the what-if layer are schematic until calibrated with PPFD, LED and harvest measurements. Photos: site survey 13 Sep 2026.")
 
 # ============================================================================ LIVE
