@@ -95,8 +95,10 @@ def figure_3d(traces, title=None, height=800, compact=False):
                       scene=dict(aspectmode="data", xaxis_title="X (m)", yaxis_title="Y (m)", zaxis_title="Z (m)"),
                       legend=dict(itemsizing="constant"))
     if compact:
-        fig.update_layout(legend=dict(orientation="h", yanchor="top", y=-0.01, xanchor="left", x=0, font=dict(size=10), itemwidth=30),
-                          title=dict(font=dict(size=13), y=0.98, yanchor="top"), margin=dict(l=0, r=0, t=55, b=45))
+        # short vertical legend at the top right (grouped entries, ~10 lines); the colour bar sits below it
+        fig.update_layout(legend=dict(orientation="v", yanchor="top", y=1.0, xanchor="left", x=1.0, font=dict(size=10), itemwidth=30,
+                                      bgcolor="rgba(255,255,255,0.6)"),
+                          title=dict(font=dict(size=13), y=0.98, yanchor="top"), margin=dict(l=0, r=0, t=55, b=10))
     return fig
 
 
