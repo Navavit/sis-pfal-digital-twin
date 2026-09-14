@@ -254,26 +254,31 @@ class DigitalTwin:
                             marker=dict(size=9, color=cs, colorscale="RdYlBu_r", cmin=cmin, cmax=cmax, symbol="diamond", line=dict(color="black", width=1),
                                         colorbar=dict(title=var + unit, x=1.0, len=0.5)))
 
-    def figure_3d(self, t=None, var="T", cmin=20, cmax=35, show_cloud=False, height=720, st: TwinState | None = None, title_prefix=""):
-        """Plotly 3-D twin at time t (or at a given TwinState, e.g. from live()): rack coloured by the room mean, XY-MD02 units by value, pipes by pump state."""
+    def figure_3d(self, t=None, var="T", cmin=20, cmax=35, show_cloud=False, height=720, st: TwinState | None = None, title_prefix="",
+                  pipes=False, compact=True):
+        """Plotly 3-D twin at time t (or at a given TwinState, e.g. from live()): rack coloured by the room mean, XY-MD02 units by value.
+        pipes=True also draws the pipework (solid = pump running); compact=True -> grouped legend under the scene."""
         if st is None:
             st = self.state(t if t is not None else self.warmest_moment())
         unit = {"T": " °C", "RH": " %", "VPD": " kPa"}[var]
         room_val = {"T": st.room_T, "RH": st.room_RH, "VPD": st.room_VPD}[var]
         zv = {q["zone"]: room_val for q in self._rack_box}
         others = self.sensors[~self.sensors.key_prefix.isin(tb.CHANNELS.keys())]
-        tr = viz.model_traces(self.model, tier_color="#cccccc") + viz.zone_traces(self._rack_box, zv, cmin=cmin, cmax=cmax, unit=unit, opacity=0.55)
-        tr += viz.equipment_traces(self.equipment_inside, opacity=0.2)
+        tr = viz.model_traces(self.model, tier_color="#cccccc", group_legend=compact) + viz.zone_traces(self._rack_box, zv, cmin=cmin, cmax=cmax, unit=unit, opacity=0.55)
+        tr += viz.equipment_traces(self.equipment_inside, opacity=0.2, group_legend=compact)
         tr += [viz.sensor_trace(others, text=[f"{r.sensor} ({r.placed_on})" for r in others.itertuples()], name="other IoT boxes", size=5), self._unit_trace(st, var, cmin, cmax)]
         on = [lp for lp, v in st.pump_on.items() if v]
-        tr += H.pipe_traces(self.network, loops=on + ["shared", "n1"]) + H.pipe_traces(self.network, loops=[lp for lp in ("gc1", "gc2") if lp not in on], opacity=0.2)
+        if pipes:
+            tr += H.pipe_traces(self.network, loops=on + ["shared", "n1"]) + H.pipe_traces(self.network, loops=[lp for lp in ("gc1", "gc2") if lp not in on], opacity=0.2)
         if show_cloud:
             pc = io.load_clean(); tr = [viz.points_trace(pc["xyz"], pc["rgb"], n=40000, size=1, opacity=0.35)] + tr
         led_txt = "LED ?" if st.led != st.led else "LED on" if st.led >= 0.5 else "LED off"
         pump_txt = "pumps: " + ", ".join(f"{'growing' if lp == 'gc1' else 'nursery-2'} {'ON' if v else 'off'}" for lp, v in st.pump_on.items())
-        title = (f"{title_prefix}{st.time:%Y-%m-%d %H:%M} — room {var} = mean of 3 wall sensors ({cmin}–{cmax}{unit}); anteroom {st.ch_T['xy_md_20']:.1f} °C, outside {st.ch_T['xy_md_24']:.1f} °C | "
-                 f"CO₂ {st.co2:.0f} ppm | EC growing {st.ec['growing (gc1)']:.2f} / nursery-2 {st.ec['nursery-2 (gc2)']:.2f} | pH {st.ph['growing (gc1)']:.2f} / {st.ph['nursery-2 (gc2)']:.2f} | {led_txt} | {pump_txt}")
-        return viz.figure_3d(tr, title=title, height=height)
+        line1 = f"{title_prefix}{st.time:%Y-%m-%d %H:%M} — room {var} = mean of 3 wall sensors ({cmin}–{cmax}{unit}); anteroom {st.ch_T['xy_md_20']:.1f} °C, outside {st.ch_T['xy_md_24']:.1f} °C"
+        line2 = (f"CO₂ {st.co2:.0f} ppm | EC growing {st.ec['growing (gc1)']:.2f} / nursery-2 {st.ec['nursery-2 (gc2)']:.2f} | "
+                 f"pH {st.ph['growing (gc1)']:.2f} / {st.ph['nursery-2 (gc2)']:.2f} | {led_txt} | {pump_txt}")
+        title = f"{line1}<br><span style='font-size:0.85em'>{line2}</span>" if compact else f"{line1} | {line2}"
+        return viz.figure_3d(tr, title=title, height=height, compact=compact)
 
     def show(self, t=None, var="T", name=None, **kw):
         """Display figure_3d in a notebook with the full-screen button (and write figures/html/<name>.html)."""
@@ -385,6 +390,8 @@ class DigitalTwin:
             if path: fig.savefig(path, dpi=150, bbox_inches="tight")
         return assign, summary, fig
 
-    def crop_mix_3d(self, assign, title=None):
-        base = viz.model_traces(self.model, tier_color="#e0e0e0") + viz.equipment_traces(self.equipment_inside, opacity=0.12) + H.pipe_traces(self.network, opacity=0.35)
+    def crop_mix_3d(self, assign, title=None, pipes=False):
+        base = viz.model_traces(self.model, tier_color="#e0e0e0", group_legend=True) + viz.equipment_traces(self.equipment_inside, opacity=0.12, group_legend=True)
+        if pipes:
+            base += H.pipe_traces(self.network, opacity=0.35)
         return CV.rack_3d_holes(assign, self.model, base_traces=base, title=title)

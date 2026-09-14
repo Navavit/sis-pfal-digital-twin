@@ -28,6 +28,14 @@ PROJECT = dict(name="SIS PFAL Digital Twin", th="โรงประลอง · 
                en="Rong Pralong project · School of Integrated Science, Kasetsart University")
 st.set_page_config(page_title=PROJECT["name"], layout="wide", page_icon=str(ASSETS / "favicon.png"))
 st.logo(str(ASSETS / "sis_logo.png"), size="large", link="https://sis.ku.ac.th")
+FONT = "IBM Plex Sans Thai"   # loopless (ไม่มีหัว) Thai + Latin in one family
+st.markdown(f"""<style>
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&display=swap');
+html, body, .stApp, .stApp * {{ font-family: '{FONT}', sans-serif !important; }}
+code, pre, .stCode *, [data-testid="stCode"] * {{ font-family: 'IBM Plex Mono', ui-monospace, monospace !important; }}
+</style>""", unsafe_allow_html=True)
+import plotly.io as pio
+pio.templates["sis"] = pio.templates["plotly_white"]; pio.templates["sis"].layout.font.family = f"{FONT}, sans-serif"; pio.templates.default = "sis"
 TZ = tb.TZ
 PLOTLY = dict(use_container_width=True, config=dict(displaylogo=False, modeBarButtonsToAdd=["resetCameraDefault3d"], responsive=True))
 
@@ -83,9 +91,7 @@ def state_cards(state, ages: dict | None = None):
 
 # ---------------------------------------------------------------------------- sidebar
 tw = get_twin()
-c_logo, c_title = st.sidebar.columns([1, 2.2])
-c_logo.image(str(ASSETS / "sis_logo.png"), width=72)
-c_title.markdown(f"**{PROJECT['name']}**  \n<small>{PROJECT['th']}</small>", unsafe_allow_html=True)
+st.sidebar.markdown(f"**{PROJECT['name']}**  \n<small>{PROJECT['th']}</small>", unsafe_allow_html=True)
 page = st.sidebar.radio("Page", ["Live", "History", "Layout & water", "What-if"], label_visibility="collapsed")
 var = st.sidebar.selectbox("3-D colour variable", ["T", "RH", "VPD"], format_func=lambda v: {"T": "air temperature", "RH": "relative humidity", "VPD": "VPD"}[v])
 RANGES = {"T": (20, 35), "RH": (40, 95), "VPD": (0.2, 2.0)}
@@ -219,10 +225,15 @@ elif page == "What-if":
             # shares must add up to exactly 100 %: the last crop takes whatever is left
             mix, used = {}, 0
             for k in picked[:-1]:
-                v = st.slider(f"{k} (%)", 0, 100 - used, min(st.session_state.get(f"mix_{k}", round(100 / len(picked))), 100 - used), key=f"mix_{k}")
+                key, room = f"mix_{k}", 100 - used
+                st.session_state[key] = min(int(st.session_state.get(key, round(100 / len(picked)))), room)   # clamp before the widget is built
+                if room > 0:
+                    v = st.slider(f"{k} (%)", 0, room, key=key)
+                else:
+                    v = 0; st.session_state[key] = 0; st.caption(f"{k}: 0 % (nothing left)")
                 mix[k] = v; used += v
             last = picked[-1]; mix[last] = 100 - used
-            st.slider(f"{last} (%) — remainder", 0, 100, mix[last], disabled=True, key=f"mix_rem_{last}")
+            st.slider(f"{last} (%) — remainder", 0, 100, mix[last], disabled=True, key=f"mix_rem_{last}_{mix[last]}")
             st.progress(1.0, text=f"total = 100 %  ({', '.join(f'{k} {v}' for k, v in mix.items())})")
             mix = {k: v for k, v in mix.items() if v > 0}
             if not mix:
@@ -247,6 +258,4 @@ elif page == "What-if":
 
 # ---------------------------------------------------------------------------- footer
 st.divider()
-f1, f2 = st.columns([1, 12])
-f1.image(str(ASSETS / "sis_logo.png"), width=48)
-f2.caption(f"**{PROJECT['name']}** — {PROJECT['th']}  \n{PROJECT['en']}")
+st.caption(f"**{PROJECT['name']}** — {PROJECT['th']}  \n{PROJECT['en']}")
