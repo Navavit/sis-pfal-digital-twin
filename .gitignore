@@ -1,0 +1,24 @@
+# --- environment / editor
+.venv/
+.DS_Store
+.ipynb_checkpoints/
+__pycache__/
+*.pyc
+.streamlit/secrets.toml
+
+# --- raw inputs that stay off GitHub (large, or contain private detail)
+# 78 + 41 MB LiDAR scans -> archive on Zenodo / Drive (see README)
+data/raw/pointcloud/*.ply
+# site photographs (one shows the farm WiFi credentials)
+data/raw/picture/
+# design drawing (PDF/PPTX, 12 MB) from the contractor
+data/raw/doc/
+# 13 MB long-format telemetry store (regenerate with notebook 04)
+data/raw/iot/*.parquet
+
+# --- derived caches (regenerate with notebooks 01-04)
+data/processed/*.npz
+data/processed/*.parquet
+# 1 MB 10-min table: KEPT so the web app has data on deploy
+!data/processed/iot_10min.parquet
+figures/html/

@@ -1,0 +1,12 @@
+# Full environment for the notebooks (point-cloud processing, Jupyter, document tools)
+-r requirements.txt
+scikit-learn
+open3d
+ipywidgets
+ipykernel
+nbformat
+nbconvert
+jupyter
+voila
+pymupdf
+python-pptx
