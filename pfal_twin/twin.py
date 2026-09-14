@@ -276,7 +276,7 @@ class DigitalTwin:
         return go.Scatter3d(x=xs, y=ys, z=zs, mode="markers+text", text=[c.replace("xy_md_", "ch ") for c in self._unit_xyz.index], textposition="top center",
                             hovertext=txt, hoverinfo="text", name=f"XY-MD02 units ({var})",
                             marker=dict(size=9, color=cs, colorscale="RdYlBu_r", cmin=cmin, cmax=cmax, symbol="diamond", line=dict(color="black", width=1),
-                                        colorbar=dict(title=var + unit, x=1.0, len=0.5)))
+                                        colorbar=dict(title=var + unit, x=1.02, xanchor="left", y=0.0, yanchor="bottom", len=0.42, thickness=14)))
 
     def figure_3d(self, t=None, var="T", cmin=20, cmax=35, show_cloud=False, height=720, st: TwinState | None = None, title_prefix="",
                   pipes=False, compact=True, public=False):
