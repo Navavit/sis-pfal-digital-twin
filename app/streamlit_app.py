@@ -26,7 +26,7 @@ sys.path.insert(0, str(ROOT))
 import os  # noqa: E402
 os.environ["PYTHONPATH"] = str(ROOT) + os.pathsep + os.environ.get("PYTHONPATH", "")
 NEEDS_PKG = "2026.09.14.8"
-APP_BUILD = "2026-09-15 a"          # shown in the footer so everyone can tell which version is running
+APP_BUILD = "2026-09-15 b"          # shown in the footer so everyone can tell which version is running
 import pfal_twin  # noqa: E402
 if getattr(pfal_twin, "__version__", "") != NEEDS_PKG:
     for _m in [m for m in sys.modules if m == "pfal_twin" or m.startswith("pfal_twin.")]:
@@ -394,6 +394,21 @@ elif page == "What-if":
     st.title("What-if")
     tab_crop, tab_light = st.tabs(["Crop mix on the 700 holes (tiers 2–5)", "Light / energy scenarios"])
     with tab_crop:
+        with st.expander("วิธีใช้ · How to use", expanded=True):
+            st.markdown("""
+**ทำอะไร** — ทดลองว่าถ้าปลูกผักหลายชนิดผสมกันบน **700 หลุม** ของชั้น 2–5 (ชั้นละ 175 หลุม = 25 คอลัมน์ × 7 แถว) จะวางตรงไหน ได้ผลผลิต/รายได้เท่าไร และแสงพอหรือไม่
+
+**ขั้นตอน**
+1. **crops** — เลือกชนิดผัก (เพิ่ม/ลบได้) จากรายการ 9 ชนิด
+2. **% แต่ละชนิด** — เลื่อน slider ของทุกชนิดยกเว้นตัวสุดท้าย; **ตัวสุดท้ายรับส่วนที่เหลือให้ครบ 100 % เอง** (slider ถัดไปจะถูกจำกัดไว้ไม่ให้เกิน)
+3. **placement** — `blocks` = จัดเป็นบล็อกต่อเนื่อง ไล่ทีละชั้น (จัดการง่าย เก็บเกี่ยวทั้งบล็อก) · `per_tier` = ทุกชั้นมีสัดส่วนเหมือนกัน (กระจายความเสี่ยงต่อชั้น)
+4. **photoperiod** — ชั่วโมงเปิดไฟต่อวัน มีผลกับ DLI (แสงสะสมรายวัน) ที่ผักได้รับ
+5. ดูผล: **ภาพ 3-D** 1 จุด = 1 หลุม สีตามชนิดผัก (หมุน/ซูม/กดขยายได้ · คลิกชื่อใน legend เพื่อซ่อน/แสดง) และ **ตาราง** ด้านล่าง; ดาวน์โหลดผังรายหลุมเป็น CSV ได้
+
+**อ่านตาราง** — `holes` จำนวนหลุม · `days_to_harvest` วันถึงเก็บเกี่ยว · `plant_fw_g` น้ำหนักสดต่อต้น · `kg_per_cycle` / `cycles_per_year` / `kg_per_year` ผลผลิต · `THB_per_year` รายได้ (ราคาในแคตตาล็อก) · `DLI_need` vs `DLI_available` แสงที่ต้องการ vs ที่โมเดลคำนวณได้ · `light_ok` = `yes` หรือขาดอีกกี่ mol/m²/d
+
+**ข้อจำกัด** — ตัวเลขผลผลิต/ราคา/DLI ที่ต้องการมาจากแคตตาล็อกเชิงสมมติ (`pfal_twin/models.py: CROPS`) และ DLI ที่มีคำนวณจากกำลัง LED โดยประมาณ **ยังไม่ได้สอบเทียบ**กับค่าวัดจริง (PPFD, จำนวนหลอด, น้ำหนักเก็บเกี่ยว) — ใช้เปรียบเทียบ *ระหว่างทางเลือก* ได้ แต่อย่านำตัวเลขสัมบูรณ์ไปอ้างอิง
+""")
         crops = [k for k in M.CROPS if k != "empty"]
         c = st.columns([1, 3])
         with c[0]:
@@ -425,6 +440,15 @@ elif page == "What-if":
         st.dataframe(summary, width="stretch")
         st.download_button("download hole assignment (CSV)", assign.to_csv(index=False).encode(), file_name="crop_mix_assignment.csv", mime="text/csv")
     with tab_light:
+        with st.expander("วิธีใช้ · How to use", expanded=True):
+            st.markdown("""
+**ทำอะไร** — เปรียบเทียบสถานการณ์ **ชั่วโมงเปิดไฟ (photoperiod) × ระดับหรี่ไฟ (dimming)** ว่าแต่ละแบบให้แสงสะสม (DLI) เท่าไร ใช้ไฟฟ้ากี่ kWh/วัน ค่าไฟกี่บาท และวันถึงเก็บเกี่ยวของผักสลัดเปลี่ยนอย่างไร
+โมเดลคิดทั้งไฟ LED และภาระแอร์ที่ต้องดึงความร้อนจาก LED ออก (สมดุลความร้อนแบบคงตัว ใช้อุณหภูมิภายนอก/anteroom เฉลี่ยจากข้อมูลจริง)
+
+**ขั้นตอน** — เลือกชุด photoperiod และ dimming ที่อยากเทียบ → ตารางแสดงทุกคู่ผสม เรียงตามค่าที่เลือก; แถวที่ DLI ใกล้ที่ผักต้องการ (สลัด ≈ 13–17 mol/m²/d) แต่ kWh ต่ำสุดคือจุดที่น่าสนใจ
+
+**ข้อจำกัด** — พารามิเตอร์ (กำลัง LED, ประสิทธิภาพ, COP แอร์, ค่าไฟ) อยู่ใน *model parameters* ด้านล่าง ยังเป็นค่าประมาณ ต้องสอบเทียบก่อนนำตัวเลขไปอ้างอิง
+""")
         c = st.columns(2)
         pps = c[0].multiselect("photoperiods (h)", [10, 12, 14, 16, 18, 20], default=[12, 14, 16, 18])
         dims = c[1].multiselect("dimming (%)", [40, 60, 80, 100], default=[60, 80, 100])
