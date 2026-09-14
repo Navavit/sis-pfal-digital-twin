@@ -25,7 +25,8 @@ sys.path.insert(0, str(ROOT))
 # is already loaded (version mismatch), drop it and re-import.
 import os  # noqa: E402
 os.environ["PYTHONPATH"] = str(ROOT) + os.pathsep + os.environ.get("PYTHONPATH", "")
-NEEDS_PKG = "2026.09.14.7"
+NEEDS_PKG = "2026.09.14.8"
+APP_BUILD = "2026-09-15 a"          # shown in the footer so everyone can tell which version is running
 import pfal_twin  # noqa: E402
 if getattr(pfal_twin, "__version__", "") != NEEDS_PKG:
     for _m in [m for m in sys.modules if m == "pfal_twin" or m.startswith("pfal_twin.")]:
@@ -435,4 +436,4 @@ elif page == "What-if":
 
 # ---------------------------------------------------------------------------- footer
 st.divider()
-st.caption(f"**{PROJECT['name']}** — {PROJECT['th']}  \n{PROJECT['en']}")
+st.caption(f"**{PROJECT['name']}** — {PROJECT['th']}  \n{PROJECT['en']}  \n<small>build {APP_BUILD} · pfal_twin {pfal_twin.__version__}</small>", unsafe_allow_html=True)
