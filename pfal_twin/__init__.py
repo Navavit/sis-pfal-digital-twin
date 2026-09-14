@@ -1,7 +1,7 @@
 """pfal_twin — helper package for the SIS PFAL digital twin (notebooks + web app)."""
 from pathlib import Path
 
-__version__ = "2026.09.15.1"   # bump when the web app depends on new package code (see app/streamlit_app.py)
+__version__ = "2026.09.15.2"   # bump when the web app depends on new package code (see app/streamlit_app.py)
 
 PKG_DIR = Path(__file__).resolve().parent
 ROOT = PKG_DIR.parent                      # PFAL/  (project root)

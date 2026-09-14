@@ -153,6 +153,23 @@ class DigitalTwin:
         table = long.set_index("column")[["value", "ts", "age", "device", "key"]].sort_values("ts", ascending=False)
         return st, table
 
+    def top_up(self, overlap="1h", verbose=False) -> pd.Timestamp:
+        """Fill the gap between the stored table and now straight from ThingsBoard (in memory only, no files written).
+        Cheap: only samples newer than data.index.max() - overlap. Returns the new end of the table."""
+        client = tb.Client().login_public()
+        start = self.data.index.max() - pd.Timedelta(overlap)
+        long = tb.fetch_history(client, start, verbose=verbose)
+        if long.empty:
+            return self.data.index.max()
+        w, _ = tb.clean_wide(tb.to_wide(long, "10min"))
+        env, ctrl = tb.split_env_control(w); w = pd.concat([env, tb.state_ffill(ctrl)], axis=1)
+        merged = w.combine_first(self.data) if len(w) else self.data
+        merged = merged.reindex(pd.date_range(merged.index.min(), merged.index.max(), freq="10min", tz=tb.TZ))
+        ctrl_cols = [c for c in merged.columns if c.split(".", 1)[1] in tb.CONTROL_KEYS]
+        merged[ctrl_cols] = merged[ctrl_cols].ffill(limit=6 * 24 * 7)
+        self.data = merged; self._prepare_data()
+        return self.data.index.max()
+
     def recent(self, hours=24, interval_min=5, keys=None):
         """Straight from ThingsBoard like the dashboard's real-time window: last `hours` hours, `interval_min`-minute averages
         for measurements and raw on/off events for the dosing pumps -> wide frame ("alias.key" columns)."""

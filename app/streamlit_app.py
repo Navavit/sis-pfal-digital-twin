@@ -25,8 +25,8 @@ sys.path.insert(0, str(ROOT))
 # is already loaded (version mismatch), drop it and re-import.
 import os  # noqa: E402
 os.environ["PYTHONPATH"] = str(ROOT) + os.pathsep + os.environ.get("PYTHONPATH", "")
-NEEDS_PKG = "2026.09.15.1"
-APP_BUILD = "2026-09-15 d"          # shown in the footer so everyone can tell which version is running
+NEEDS_PKG = "2026.09.15.2"
+APP_BUILD = "2026-09-15 e"          # shown in the footer so everyone can tell which version is running
 import pfal_twin  # noqa: E402
 if getattr(pfal_twin, "__version__", "") != NEEDS_PKG:
     for _m in [m for m in sys.modules if m == "pfal_twin" or m.startswith("pfal_twin.")]:
@@ -81,6 +81,19 @@ def get_twin(version: str = "") -> DigitalTwin:
 
 
 STORE_VERSION = store_version()
+
+
+@st.cache_data(ttl=600, show_spinner=False)
+def top_up(version: str, _nonce: int = 0):
+    """Every 10 min: append what ThingsBoard has since the stored table ended (in memory), so History is never behind
+    even when the 30-min GitHub Actions job is delayed."""
+    try:
+        return get_twin(version).top_up()
+    except Exception as e:
+        return f"top-up failed: {e}"
+
+
+TOP_UP = top_up(STORE_VERSION, int(time.time() // 600))
 
 
 @st.cache_data(ttl=60, show_spinner=False)
@@ -231,8 +244,8 @@ _ss = st.session_state.get("store_status", {}); _lm = _ss.get("local") or {}
 st.sidebar.markdown(f"**History store**  \n{d0:%Y-%m-%d} → {d1:%Y-%m-%d %H:%M}  \n{len(tw.data):,} × 10-min bins  \n"
                     f"<small>updated {pd.Timestamp(_lm['updated_at']).tz_convert(TZ):%d %b %H:%M} · {_ss.get('action', '')}</small>" if _lm.get("updated_at") else
                     f"**History store**  \n{d0:%Y-%m-%d} → {d1:%Y-%m-%d %H:%M}  \n{len(tw.data):,} × 10-min bins", unsafe_allow_html=True)
-if st.sidebar.button("↻ check for new data", help="GitHub Actions refreshes the store from ThingsBoard every 30 min; the app checks every 10 min — this checks now"):
-    store_version.clear(); static_figure.clear(); st.rerun()
+if st.sidebar.button("↻ check for new data", help="GitHub Actions refreshes the store every 30 min and the app tops it up from ThingsBoard every 10 min — this checks now"):
+    store_version.clear(); top_up.clear(); static_figure.clear(); st.rerun()
 with st.sidebar.expander("about"):
     st.code(tw.summary(), language=None)
     st.markdown(f"{PROJECT['en']}  \nSIS PFAL = plant factory with artificial lighting at the School of Integrated Science.  \n"
@@ -339,7 +352,7 @@ elif page == "History":
     _lm = (st.session_state.get("store_status") or {}).get("local") or {}
     upd = f" · store updated {pd.Timestamp(_lm['updated_at']).tz_convert(TZ):%d %b %Y %H:%M}" if _lm.get("updated_at") else ""
     st.markdown(f"**ข้อมูลมีตั้งแต่ · data available from {d0:%d %b %Y %H:%M} → {d1:%d %b %Y %H:%M}** ({days} days, {len(tw.data):,} × 10-min bins, {tw.data.shape[1]} columns){upd}  \n"
-                "Refreshed from ThingsBoard by GitHub Actions every 30 min; grey days below = the device sent nothing that day.")
+                "Store refreshed by GitHub Actions every 30 min + topped up from ThingsBoard every 10 min; grey days below = the device sent nothing that day.")
     st.plotly_chart(availability_figure(STORE_VERSION), use_container_width=True, key="availability")
     with st.expander("⬇ download the whole store · ดาวน์โหลดข้อมูลทั้งหมด"):
         st.markdown("Columns are `device.key` (e.g. `gw.xy_md_21_t` = temperature of XY-MD02 unit 21, `gc1.ec` = EC of the growing-stage controller); "
