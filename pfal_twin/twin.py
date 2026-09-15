@@ -64,7 +64,8 @@ class DigitalTwin:
         self._prepare_data()
 
     @classmethod
-    def load(cls, with_data: bool = True):
+    def load(cls, with_data: bool = True, start=None):
+        """start: keep only data from this date (e.g. "2026-06-01" — earlier samples are commissioning tests)."""
         model = io.load_model(); zones = io.load_model("zones.json")["zones"]
         sensors, equipment = layout.load_layout()
         try:
@@ -76,6 +77,9 @@ class DigitalTwin:
         except FileNotFoundError:
             design = None
         data = pd.read_parquet(tb.WIDE_PARQUET) if (with_data and tb.WIDE_PARQUET.exists()) else None
+        if data is not None and start is not None:
+            t0 = pd.Timestamp(start); t0 = t0.tz_localize(tb.TZ) if t0.tzinfo is None else t0
+            data = data.loc[t0:]
         return cls(model, zones, sensors, equipment, network, data, None, design)
 
     def _prepare_data(self):
