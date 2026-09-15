@@ -25,8 +25,8 @@ sys.path.insert(0, str(ROOT))
 # is already loaded (version mismatch), drop it and re-import.
 import os  # noqa: E402
 os.environ["PYTHONPATH"] = str(ROOT) + os.pathsep + os.environ.get("PYTHONPATH", "")
-NEEDS_PKG = "2026.09.15.8"
-APP_BUILD = "2026-09-15 o"          # shown in the footer so everyone can tell which version is running
+NEEDS_PKG = "2026.09.15.9"
+APP_BUILD = "2026-09-15 p"          # shown in the footer so everyone can tell which version is running
 import pfal_twin  # noqa: E402
 if getattr(pfal_twin, "__version__", "") != NEEDS_PKG:
     for _m in [m for m in sys.modules if m == "pfal_twin" or m.startswith("pfal_twin.")]:
@@ -79,9 +79,10 @@ def store_version(_nonce: int = 0) -> str:
 def get_twin(version: str = "", pkg: str = "") -> DigitalTwin:
     """Cached per store version AND package version: after a redeploy Streamlit reloads pfal_twin, but an instance
     built from the old class would stay in the cache without the new methods."""
-    return DigitalTwin.load()
+    return DigitalTwin.load(start=HISTORY_START)
 
 
+HISTORY_START = "2026-06-01"       # the facility went into continuous operation in June 2026; earlier samples are commissioning tests
 STORE_VERSION = store_version()
 
 
@@ -372,6 +373,7 @@ elif page == "History":
     _lm = (st.session_state.get("store_status") or {}).get("local") or {}
     upd = f" · store updated {pd.Timestamp(_lm['updated_at']).tz_convert(TZ):%d %b %Y %H:%M}" if _lm.get("updated_at") else ""
     st.markdown(f"**ข้อมูลมีตั้งแต่ · data available from {d0:%d %b %Y %H:%M} → {d1:%d %b %Y %H:%M}** ({days} days, {len(tw.data):,} × 10-min bins, {tw.data.shape[1]} columns){upd}  \n"
+                f"Shown from {pd.Timestamp(HISTORY_START):%d %b %Y} (start of continuous operation; earlier commissioning samples are in the full store on GitHub). "
                 "Store refreshed by GitHub Actions every 30 min + topped up from ThingsBoard every 10 min; grey days below = the device sent nothing that day.")
     st.plotly_chart(availability_figure(STORE_VERSION), use_container_width=True, key="availability")
     with st.expander("⬇ download the whole store · ดาวน์โหลดข้อมูลทั้งหมด"):
