@@ -205,7 +205,19 @@ class DigitalTwin:
         if not frames:
             return pd.DataFrame()
         long = pd.concat(frames, ignore_index=True); long["col"] = long["device"] + "." + long["key"]
-        return long.pivot_table(index="ts", columns="col", values="value", aggfunc="last").sort_index()
+        wide = long.pivot_table(index="ts", columns="col", values="value", aggfunc="last").sort_index()
+        # state keys (set-points, modes ...) are published only when they change -> a key silent for the whole window
+        # would be missing; seed it with the device's latest value at the window start so the line/label still shows
+        for a, ks in by_dev.items():
+            missing = [k for k in ks if k in tb.CONTROL_KEYS and f"{a}.{k}" not in wide.columns]
+            if missing:
+                try:
+                    lat = client.latest(tb.DEVICES[a]["id"], missing)
+                    for _, r in lat.iterrows():
+                        wide.loc[wide.index.min(), f"{a}.{r['key']}"] = r["value"]
+                except Exception as e:
+                    print(f"recent: latest {a} -> {e}")
+        return wide.sort_index()
 
     def history(self, start=None, end=None, columns=None, freq=None):
         """Slice of the local 10-min table (columns like "gw.xy_md_21_t", "gc1.ec"); freq="1h" etc. resamples by mean.

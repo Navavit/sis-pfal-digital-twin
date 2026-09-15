@@ -25,8 +25,8 @@ sys.path.insert(0, str(ROOT))
 # is already loaded (version mismatch), drop it and re-import.
 import os  # noqa: E402
 os.environ["PYTHONPATH"] = str(ROOT) + os.pathsep + os.environ.get("PYTHONPATH", "")
-NEEDS_PKG = "2026.09.15.7"
-APP_BUILD = "2026-09-15 m"          # shown in the footer so everyone can tell which version is running
+NEEDS_PKG = "2026.09.15.8"
+APP_BUILD = "2026-09-15 o"          # shown in the footer so everyone can tell which version is running
 import pfal_twin  # noqa: E402
 if getattr(pfal_twin, "__version__", "") != NEEDS_PKG:
     for _m in [m for m in sys.modules if m == "pfal_twin" or m.startswith("pfal_twin.")]:
@@ -76,7 +76,9 @@ def store_version(_nonce: int = 0) -> str:
 
 
 @st.cache_resource(show_spinner="loading digital twin ...")
-def get_twin(version: str = "") -> DigitalTwin:
+def get_twin(version: str = "", pkg: str = "") -> DigitalTwin:
+    """Cached per store version AND package version: after a redeploy Streamlit reloads pfal_twin, but an instance
+    built from the old class would stay in the cache without the new methods."""
     return DigitalTwin.load()
 
 
@@ -88,7 +90,7 @@ def top_up(version: str, _nonce: int = 0):
     """Every 10 min: append what ThingsBoard has since the stored table ended (in memory), so History is never behind
     even when the 30-min GitHub Actions job is delayed."""
     try:
-        return get_twin(version).top_up()
+        return get_twin(version, NEEDS_PKG).top_up()
     except Exception as e:
         return f"top-up failed: {e}"
 
@@ -99,17 +101,18 @@ TOP_UP = top_up(STORE_VERSION, int(time.time() // 600))
 @st.cache_data(ttl=60, show_spinner=False)
 def live_snapshot(_nonce: int):
     """Latest values from ThingsBoard (cached 60 s so many viewers do not hammer the server)."""
-    st_, table = get_twin(STORE_VERSION).live()
+    st_, table = get_twin(STORE_VERSION, NEEDS_PKG).live()
     return st_, table
 
 
 @st.cache_data(ttl=60, show_spinner=False)
 def recent_window(hours: int, _nonce: int):
     """Last `hours` hours straight from ThingsBoard (5-min averages, raw pump events) — same window as the dashboard."""
-    return get_twin(STORE_VERSION).recent(hours=hours, interval_min=5 if hours <= 24 else 15)
+    return get_twin(STORE_VERSION, NEEDS_PKG).recent(hours=hours, interval_min=5 if hours <= 24 else 15)
 
 
-def ts_chart(df, cols, title, unit="", height=280, setpoints=None, step=False):
+def ts_chart(df, cols, title, unit="", height=280, setpoints=None, step=False, subtitle=None):
+    """title = short (must fit half/third of the page); subtitle = statistics, drawn smaller on a second line."""
     import plotly.graph_objects as go
     fig = go.Figure()
     for k in cols:
@@ -121,14 +124,18 @@ def ts_chart(df, cols, title, unit="", height=280, setpoints=None, step=False):
     for k, lab in (setpoints or {}).items():       # set-point: bold red so it stands out against the measured line
         if k in df.columns and df[k].dropna().size:
             sp = df[k].ffill().bfill(); last = sp.dropna().iloc[-1]        # set-points are published on change only -> hold across the window
-            fig.add_scatter(x=df.index, y=sp.values, mode="lines", name=f"<b>{lab} {last:.2f}</b>", line=dict(color="#c0392b", width=3, dash="dash"), line_shape="hv")
+            fig.add_scatter(x=df.index, y=sp.values, mode="lines", name=f"<b>{lab}</b>", line=dict(color="#c0392b", width=3, dash="dash"), line_shape="hv")
             fig.add_annotation(x=df.index[-1], y=last, text=f"<b>set {last:.2f}</b>", showarrow=False, xanchor="left", xshift=4, font=dict(color="#c0392b", size=12))
             fig.update_layout(margin=dict(r=70))
     # title on top, legend directly under it (above the plot) -> never collides with the x-axis date labels
     n = len(fig.data); rows = 1 if n <= 3 else 2 if n <= 6 else 3
-    fig.update_layout(title=dict(text=title, y=0.99, yanchor="top", x=0, xanchor="left", font=dict(size=14)), height=height,
-                      margin=dict(l=45, r=10, t=36 + 22 * rows, b=35), yaxis_title=unit, hovermode="x unified",
+    top = 34 + 22 * rows + (18 if subtitle else 0)             # title line + optional statistics line + legend rows
+    fig.update_layout(title=dict(text=title, yref="container", y=1, yanchor="top", x=0, xanchor="left", font=dict(size=14), pad=dict(t=8)),
+                      height=height, margin=dict(l=45, r=10, t=top, b=35), yaxis_title=unit, hovermode="x unified",
                       legend=dict(orientation="h", yanchor="bottom", y=1.0, x=0, xanchor="left", font=dict(size=10), itemwidth=30))
+    if subtitle:   # statistics line between the title and the legend
+        fig.add_annotation(text=subtitle, xref="paper", yref="paper", x=0, y=1.0, xanchor="left", yanchor="bottom", yshift=22 * rows + 2,
+                           showarrow=False, font=dict(size=11, color="#555"))
     return fig
 
 
@@ -136,13 +143,16 @@ def dose_chart(df, dev, height=220):
     """ThingsBoard 'Dose stage' state chart: three lanes (A, B, pH) that go high while the pump runs."""
     import plotly.graph_objects as go
     fig = go.Figure(); lanes = (("pumpA", "part A", 2), ("pumpB", "part B", 1), ("pumpPH", "acid (pH)", 0))
+    x0, x1 = df.index.min(), df.index.max()
     for k, lab, base in lanes:
         col = f"{dev}.{k}"
         if col in df.columns and df[col].dropna().size:
-            d = df[col].dropna()
-            fig.add_scatter(x=d.index, y=base + 0.8 * d.values, mode="lines", name=lab, line_shape="hv")
-    fig.update_layout(title=dict(text=f"Dose stage — {dev} ({'growing 200 L' if dev == 'gc1' else 'nursery-2 100 L'})", y=0.99, yanchor="top", x=0, xanchor="left", font=dict(size=14)),
-                      height=height, margin=dict(l=45, r=10, t=58, b=35), yaxis=dict(tickvals=[0, 1, 2], ticktext=["acid", "B", "A"], range=[-0.2, 3]),
+            d = df[col].dropna()          # events; hold the state from the window start to its end so a quiet pump still draws a flat lane
+            xs = [x0] + list(d.index) + [x1]; ys = [d.iloc[0]] + list(d.values) + [d.iloc[-1]]
+            fig.add_scatter(x=xs, y=[base + 0.8 * v for v in ys], mode="lines", name=lab, line_shape="hv")
+    fig.update_xaxes(range=[x0, x1])
+    fig.update_layout(title=dict(text=f"Dose stage — {dev}", yref="container", y=1, yanchor="top", x=0, xanchor="left", font=dict(size=14), pad=dict(t=8)),
+                      height=height, margin=dict(l=45, r=10, t=78, b=35), yaxis=dict(tickvals=[0, 1, 2], ticktext=["acid", "B", "A"], range=[-0.2, 3]),
                       hovermode="x unified", legend=dict(orientation="h", yanchor="bottom", y=1.0, x=0, xanchor="left", font=dict(size=10)))
     return fig
 
@@ -155,7 +165,7 @@ def stat_line(d, nd=2):
 def availability_figure(version: str):
     """Per-device data coverage per day (share of 10-min bins with at least one value) -> shows the gaps at a glance."""
     import plotly.graph_objects as go
-    w = get_twin(version).data
+    w = get_twin(version, NEEDS_PKG).data
     w = w[[c for c in w.columns if c.split(".", 1)[1] not in tb.CONTROL_KEYS]]     # measured keys only (control keys are forward-filled)
     av = tb.availability(w, "1D")
     order = [d for d in ("gw", "gc1", "gc2", "co2") if d in av.columns]
@@ -170,7 +180,7 @@ def availability_figure(version: str):
 def full_store_bytes(version: str, fmt: str) -> bytes:
     """Whole 10-min table as CSV or Parquet for the download buttons (cached per store version)."""
     import io as _io
-    w = get_twin(version).data
+    w = get_twin(version, NEEDS_PKG).data
     if fmt == "parquet":
         b = _io.BytesIO(); w.to_parquet(b); return b.getvalue()
     return w.to_csv(float_format="%.3f").encode()
@@ -178,7 +188,7 @@ def full_store_bytes(version: str, fmt: str) -> bytes:
 
 @st.cache_resource(show_spinner="rendering layout ...")
 def static_figure(kind: str):
-    tw = get_twin(STORE_VERSION)
+    tw = get_twin(STORE_VERSION, NEEDS_PKG)
     return {"layout": tw.layout_figure, "water": tw.water_plan, "flow": tw.flow_diagram, "corner": tw.corner_detail, "heatmap": tw.heatmap}[kind]()
 
 
@@ -229,7 +239,7 @@ def state_cards(state, ages: dict | None = None, row=None):
 
 
 # ---------------------------------------------------------------------------- sidebar
-tw = get_twin(STORE_VERSION)
+tw = get_twin(STORE_VERSION, NEEDS_PKG)
 st.sidebar.markdown(f"**{PROJECT['name']}**  \n<small>{PROJECT['th']}</small>", unsafe_allow_html=True)
 page = st.sidebar.radio("Page", ["Overview", "Live", "History", "Layout & water", "What-if"], label_visibility="collapsed")
 VAR_LABEL = {"T": "air temperature (°C)", "RH": "relative humidity (%)", "VPD": "VPD (kPa)"}
@@ -323,16 +333,18 @@ elif page == "Live":
             c1.plotly_chart(ts_chart(R, ch, "Temperature — 5 × XY-MD02 (°C)", "°C"), use_container_width=True, key="ts_T")
             c2.plotly_chart(ts_chart(R, [k[:-2] + "_h" for k in ch], "Humidity — 5 × XY-MD02 (% RH)", "% RH"), use_container_width=True, key="ts_RH")
             c1, c2 = st.columns(2)
-            c1.plotly_chart(ts_chart(R, ["co2.CO2"], f"CO₂ (ppm) — {stat_line(R.get('co2.CO2', pd.Series(dtype=float)), 0)}", "ppm"), use_container_width=True, key="ts_co2")
+            c1.plotly_chart(ts_chart(R, ["co2.CO2"], "CO₂ (ppm)", "ppm", subtitle=stat_line(R.get("co2.CO2", pd.Series(dtype=float)), 0)), use_container_width=True, key="ts_co2")
             c2.plotly_chart(ts_chart(R, ["co2.VPD", "co2.VOC"], "VPD (kPa) / VOC — CO₂ controller", ""), use_container_width=True, key="ts_vpd")
             for dev, nm in (("gc1", "Grow controller gc1 — growing stage, 200 L tank"), ("gc2", "Grow controller gc2 — nursery 2, 100 L tank")):
                 st.markdown(f"**{nm}**")
                 c1, c2, c3 = st.columns([2, 2, 1.4])
                 sp_ec = R.get(f"{dev}.ecSetPoint", pd.Series(dtype=float)).dropna(); sp_ph = R.get(f"{dev}.pHSetPoint", pd.Series(dtype=float)).dropna()
                 red = lambda v: f" · <span style='color:#c0392b'><b>set {v.iloc[-1]:.2f}</b></span>" if v.size else ""
-                c1.plotly_chart(ts_chart(R, [f"{dev}.ec"], f"EC (mS/cm) — {stat_line(R.get(f'{dev}.ec', pd.Series(dtype=float)))}{red(sp_ec)}", "mS/cm", setpoints={f"{dev}.ecSetPoint": "EC set-point"}), use_container_width=True, key=f"ts_ec_{dev}")
-                c2.plotly_chart(ts_chart(R, [f"{dev}.ph"], f"pH — {stat_line(R.get(f'{dev}.ph', pd.Series(dtype=float)))}{red(sp_ph)}", "pH", setpoints={f"{dev}.pHSetPoint": "pH set-point"}), use_container_width=True, key=f"ts_ph_{dev}")
-                c3.plotly_chart(dose_chart(R, dev, height=280), use_container_width=True, key=f"dose_{dev}")
+                c1.plotly_chart(ts_chart(R, [f"{dev}.ec"], f"EC (mS/cm){red(sp_ec)}", "mS/cm", setpoints={f"{dev}.ecSetPoint": "set-point"},
+                                         subtitle=stat_line(R.get(f"{dev}.ec", pd.Series(dtype=float)))), use_container_width=True, key=f"ts_ec_{dev}")
+                c2.plotly_chart(ts_chart(R, [f"{dev}.ph"], f"pH{red(sp_ph)}", "pH", setpoints={f"{dev}.pHSetPoint": "set-point"},
+                                         subtitle=stat_line(R.get(f"{dev}.ph", pd.Series(dtype=float)))), use_container_width=True, key=f"ts_ph_{dev}")
+                c3.plotly_chart(dose_chart(R, dev, height=300), use_container_width=True, key=f"dose_{dev}")
             if extended:
                 st.plotly_chart(ts_chart(R, ["gc1.led", "gc1.pwmWater", "gc2.pwmWater", "co2.Relay_co2"], "LED / circulation pumps / CO₂ valve (beyond the dashboard)", "on = 1", step=True, height=220), use_container_width=True, key="ts_ctrl")
 
