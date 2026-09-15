@@ -25,3 +25,11 @@ figures/html/
 
 # --- manuscript drafts stay private until submission
 paper/
+
+# --- research pipeline stays local: the public repo is the web app + data (paper cites it as code/model/data store)
+notebooks/
+figures/
+scripts/make_notebooks.py
+scripts/photos_to_jpg.sh
+docs/*
+!docs/DATA_DICTIONARY.md

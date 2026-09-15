@@ -47,4 +47,4 @@ streamlit run app/streamlit_app.py
 - Gateway ของเซ็นเซอร์อุณหภูมิ/ความชื้นส่งค่าไม่สม่ำเสมอในบางช่วง กราฟจึงมีช่องว่างได้ตามสภาพจริง
 
 ---
-รายละเอียดทางเทคนิค (pipeline จาก point cloud, notebooks, API ของ `DigitalTwin`, แผนงาน) อยู่ใน [`docs/DEVELOPER_GUIDE.md`](docs/DEVELOPER_GUIDE.md) และ [`docs/DIGITAL_TWIN_PLAN.md`](docs/DIGITAL_TWIN_PLAN.md)
+ความหมายของทุกตัวแปรอยู่ใน [`docs/DATA_DICTIONARY.md`](docs/DATA_DICTIONARY.md); API ของ twin ดูที่ docstring ของ [`pfal_twin/twin.py`](pfal_twin/twin.py)
