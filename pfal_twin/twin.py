@@ -276,18 +276,28 @@ class DigitalTwin:
         return df
 
     # ------------------------------------------------------------------ figures: geometry & systems
-    def layout_figure(self, path=None, figsize=(27, 17)):
+    def network_inside(self, margin=0.01):
+        """Copy of the pipe network without the segments that leave the room (drain to outside, RO/tap supply lines)."""
+        R = self.model["room"]
+        ok = lambda e: all(-margin <= x <= R["L"] + margin and -margin <= y <= R["W"] + margin for x, y, *_ in e["pts"])
+        return {**self.network, "edges": [e for e in self.network["edges"] if ok(e)]}
+
+    def layout_figure(self, path=None, figsize=(27, 17), inside_only=False):
+        """inside_only=True: grow room only — no pipework outside the walls and no outdoor equipment (print figure)."""
         import matplotlib.pyplot as plt
         try:
             pc = io.load_clean(); P, RGB = pc["xyz"], pc["rgb"]
         except FileNotFoundError:  # deployed without the point-cloud cache: draw the elevation from the model only
             P = RGB = None
+        net = self.network_inside() if inside_only else self.network
+        eq_plan = self.equipment[~self.equipment.location.isin(["outside", "outside_far"])] if inside_only else self.equipment
+        s_plan = self.sensors[~self.sensors.location.isin(["outside", "outside_far"])] if inside_only else self.sensors
         fig = plt.figure(figsize=figsize)
         gs = fig.add_gridspec(2, 2, width_ratios=[3.3, 1], height_ratios=[1.25, 1], wspace=0.01, hspace=0.12)
         ax_plan, ax_key, ax_elev = fig.add_subplot(gs[0, 0]), fig.add_subplot(gs[:, 1]), fig.add_subplot(gs[1, 0])
-        viz.plan_layout(self.model, self.zones, self.equipment, self.sensors, ax=ax_plan, key_ax=ax_key, net=self.network)
-        eq2 = self.equipment[self.equipment.location != "outside_far"]; s2 = self.sensors[self.sensors.location != "outside_far"]
-        viz.elevation_layout(self.model, P, RGB, eq2, s2, ax=ax_elev, net=self.network)
+        viz.plan_layout(self.model, self.zones, eq_plan, s_plan, ax=ax_plan, key_ax=ax_key, net=net)
+        eq2 = eq_plan[eq_plan.location != "outside_far"]; s2 = s_plan[s_plan.location != "outside_far"]
+        viz.elevation_layout(self.model, P, RGB, eq2, s2, ax=ax_elev, net=net)
         if path:
             fig.savefig(path, dpi=170, bbox_inches="tight")
         return fig
@@ -456,16 +466,16 @@ class DigitalTwin:
         st, _ = self.live()
         return self.figure_3d(var=var, st=st, title_prefix="LIVE ", **kw)
 
-    def heatmap(self, path=None):
+    def heatmap(self, path=None, figsize=(17, 6.5), n_ticks=16, short_labels=False):
         import matplotlib.pyplot as plt
         Th = self.T[self.has_room].resample("1h").mean(); Hh = self.RH[self.has_room].resample("1h").mean()
-        fig, axes = plt.subplots(2, 1, figsize=(17, 6.5), sharex=True)
+        fig, axes = plt.subplots(2, 1, figsize=figsize, sharex=True)
         for ax, D, label, cmap, vmin, vmax in ((axes[0], Th, "air temperature (°C)", "RdYlBu_r", 20, 35), (axes[1], Hh, "relative humidity (%)", "YlGnBu", 40, 95)):
             A = np.ma.masked_invalid(D.T.values[::-1])
             im = ax.imshow(A, aspect="auto", cmap=cmap, vmin=vmin, vmax=vmax, interpolation="nearest")
-            ax.set_facecolor("#dddddd"); ax.set_yticks(range(len(D.columns))); ax.set_yticklabels([tb.channel_label(c) for c in D.columns[::-1]], fontsize=8)
+            ax.set_facecolor("#dddddd"); ax.set_yticks(range(len(D.columns))); ax.set_yticklabels([(f"ch {c[-2:]} " + tb.CHANNELS[c]["short"].split(" (")[0].replace("Inside = ", "")) if short_labels else tb.channel_label(c) for c in D.columns[::-1]], fontsize=8)
             plt.colorbar(im, ax=ax, pad=0.01, label=label)
-        step = max(1, len(Th) // 16); axes[1].set_xticks(range(0, len(Th), step)); axes[1].set_xticklabels([t.strftime("%d %b %H:%M") for t in Th.index[::step]], rotation=45, ha="right", fontsize=8)
+        step = max(1, len(Th) // n_ticks); axes[1].set_xticks(range(0, len(Th), step)); axes[1].set_xticklabels([t.strftime("%d %b %H:%M") for t in Th.index[::step]], rotation=45, ha="right", fontsize=8)
         axes[0].set_title("XY-MD02 channels — temperature and humidity (hourly means; grey = no data)")
         fig.tight_layout()
         if path: fig.savefig(path, dpi=150)
