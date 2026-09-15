@@ -26,7 +26,7 @@ sys.path.insert(0, str(ROOT))
 import os  # noqa: E402
 os.environ["PYTHONPATH"] = str(ROOT) + os.pathsep + os.environ.get("PYTHONPATH", "")
 NEEDS_PKG = "2026.09.15.2"
-APP_BUILD = "2026-09-15 e"          # shown in the footer so everyone can tell which version is running
+APP_BUILD = "2026-09-15 f"          # shown in the footer so everyone can tell which version is running
 import pfal_twin  # noqa: E402
 if getattr(pfal_twin, "__version__", "") != NEEDS_PKG:
     for _m in [m for m in sys.modules if m == "pfal_twin" or m.startswith("pfal_twin.")]:
@@ -273,12 +273,15 @@ Digital twin = แบบจำลองห้องปลูกจริง (ร
 
     st.markdown("#### ข้อมูลที่ใช้ · Data behind the twin")
     R_, K_ = tw.model["room"], tw.model["rack"]
-    f1, f2, f3, f4, f5 = st.columns(5)
-    f1.metric("Room (L × W × H)", f"{R_['L']:.2f} × {R_['W']:.2f} × {R_['H']:.2f} m", "LiDAR scan, 2 passes", delta_color="off")
-    f2.metric("Rack", f"{K_['length']:.2f} × {K_['width']:.2f} m · {len(K_['tiers'])} tiers", "700 holes on tiers 2–5", delta_color="off")
-    f3.metric("Sensors / equipment", f"{len(tw.sensors)} / {len(tw.equipment)}", "5 × XY-MD02 T/RH, CO₂, 2 grow controllers", delta_color="off")
-    f4.metric("IoT records", f"{len(tw.data):,} × 10 min", f"{d0:%d %b %Y} → {d1:%d %b %Y}", delta_color="off")
-    f5.metric("Source", "ThingsBoard", "cat-smartgrow.com (Civic Agrotech)", delta_color="off")
+    st.markdown(f"""
+| | |
+|---|---|
+| **ห้อง · room** | {R_['L']:.2f} × {R_['W']:.2f} × {R_['H']:.2f} m — from 2 LiDAR scans (13 Sep 2026) |
+| **ชั้นปลูก · rack** | {K_['length']:.2f} × {K_['width']:.2f} m, {len(K_['tiers'])} tiers · 700 planting holes on tiers 2–5 |
+| **เซ็นเซอร์ / อุปกรณ์ · sensors / equipment** | {len(tw.sensors)} sensor units (5 × XY-MD02 T/RH, CO₂ controller, 2 grow controllers) · {len(tw.equipment)} mapped items |
+| **ข้อมูล IoT · records** | {len(tw.data):,} × 10-min bins, {d0:%d %b %Y} → {d1:%d %b %Y} (refreshed every 30 min) |
+| **แหล่งข้อมูล · source** | ThingsBoard dashboard *Vertical Smart Farming* — cat-smartgrow.com (Civic Agrotech) |
+""")
     st.caption("Model parameters of the what-if layer are schematic until calibrated with PPFD, LED and harvest measurements. Photos: site survey 13 Sep 2026.")
 
 # ============================================================================ LIVE
