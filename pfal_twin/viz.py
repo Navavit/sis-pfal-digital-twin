@@ -137,8 +137,9 @@ def equipment_traces(eq, opacity=0.5, group_legend=False):
     tr, seen = [], set()
     for _, r in eq.iterrows():
         m = box_mesh(r.x0, r.x1, r.y0, r.y1, r.z0, r.z1, color=EQUIP_COLORS.get(r.category, "#888"), opacity=opacity,
-                     name=f"{r['name']} [{r.confidence}]")
-        m.update(hovertext=f"{r['name']}<br>{r.category} — confidence {r.confidence}<br>{r.evidence}", hoverinfo="text")
+                     name=f"{r['name']} [{r.confidence}]" if not group_legend else r["name"])
+        m.update(hovertext=f"<b>{r['name']}</b><br>{EQUIP_GROUP_LABEL.get(r.category, r.category)}" if group_legend
+                 else f"{r['name']}<br>{r.category} — confidence {r.confidence}<br>{r.evidence}", hoverinfo="text")
         if group_legend:
             m.update(legendgroup=r.category, name=EQUIP_GROUP_LABEL.get(r.category, r.category), showlegend=r.category not in seen)
             seen.add(r.category)
