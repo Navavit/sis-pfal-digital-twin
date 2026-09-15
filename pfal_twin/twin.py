@@ -295,6 +295,23 @@ class DigitalTwin:
         if path: fig.savefig(path, dpi=150, bbox_inches="tight")
         return fig
 
+    # ------------------------------------------------------------------ figures: the LiDAR scan itself
+    def cloud_figure(self, n=150000, size=1.6, with_model=True, height=680, asset=None, open_up=True):
+        """The downsampled second LiDAR scan (app/assets/pointcloud_scan2.npz, true colour) in the room frame, with the
+        parametric model on top — shows where the geometry of the twin comes from."""
+        from . import ROOT
+        asset = Path(asset) if asset else ROOT / "app" / "assets" / "pointcloud_scan2.npz"
+        z = np.load(asset); P = z["xyz"].astype(np.float32); RGB = z["rgb"]; meta = str(z["meta"][0]) if "meta" in z.files else ""
+        total = len(P)
+        if open_up:   # take the lid off: drop the ceiling and the wall facing the default camera so the rack is visible
+            R = self.model["room"]; k = (P[:, 2] < R["H"] - 0.12) & (P[:, 1] < R["W"] - 0.10); P, RGB = P[k], RGB[k]
+        tr = [viz.points_trace(P, RGB, n=min(n, len(P)), size=size, name=f"LiDAR scan 2 ({min(n, len(P)):,} of {total:,} points{', ceiling + front wall hidden' if open_up else ''})")]
+        if with_model:
+            tr += viz.model_traces(self.model, tier_color="#2a7d2a", group_legend=True)
+        fig = viz.figure_3d(tr, title="LiDAR point cloud of SIS PFAL (scan 2, 13 Sep 2026) with the parametric model of the twin", height=height, compact=True)
+        fig.update_layout(scene=dict(bgcolor="white"))
+        return fig, meta
+
     # ------------------------------------------------------------------ figures: data twin
     def _unit_trace(self, st: TwinState, var, cmin, cmax):
         import plotly.graph_objects as go
