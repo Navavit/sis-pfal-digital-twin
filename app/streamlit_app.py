@@ -26,7 +26,7 @@ sys.path.insert(0, str(ROOT))
 import os  # noqa: E402
 os.environ["PYTHONPATH"] = str(ROOT) + os.pathsep + os.environ.get("PYTHONPATH", "")
 NEEDS_PKG = "2026.09.15.9"
-APP_BUILD = "2026-09-15 r"          # shown in the footer so everyone can tell which version is running
+APP_BUILD = "2026-09-15 s"          # shown in the footer so everyone can tell which version is running
 import pfal_twin  # noqa: E402
 if getattr(pfal_twin, "__version__", "") != NEEDS_PKG:
     for _m in [m for m in sys.modules if m == "pfal_twin" or m.startswith("pfal_twin.")]:
@@ -271,10 +271,11 @@ if page == "Overview":
     PH = ASSETS / "photos"
     st.title("SIS PFAL Digital Twin")
     st.markdown(f"**{PROJECT['th']}**  \n{PROJECT['en']}")
-    c1, c2 = st.columns([1.35, 1])
-    c1.image(str(PH / "IMG_2518.jpg"), caption="SIS PFAL — plant factory with artificial lighting, School of Integrated Science, Kasetsart University (13 Sep 2026)", width="stretch")
+    st.image(str(PH / "IMG_2413.jpg"), caption="SIS PFAL in production — five tiers of leafy greens under LED bars (growing stage on tiers 2–5, nursery on tier 1)", width="stretch")
+    c1, c2, c3 = st.columns(3)
+    c1.image(str(PH / "IMG_2518.jpg"), caption="PFAL @ SIS KU — School of Integrated Science, Kasetsart University (13 Sep 2026)", width="stretch")
     c2.image(str(PH / "IMG_2519.jpg"), caption="Front of the unit: anteroom entrance beside the SIS KU coffee corner", width="stretch")
-    c2.image(str(PH / "IMG_2520.jpg"), caption="Inside: one 5-tier rack, 5.4 × 1.0 m, in a 7.1 × 3.0 × 2.6 m room", width="stretch")
+    c3.image(str(PH / "IMG_2520.jpg"), caption="Inside: one 5-tier rack, 5.4 × 1.0 m, in a 7.1 × 3.0 × 2.6 m room", width="stretch")
 
     st.markdown("""
 #### แอปนี้ทำอะไรได้ · What this app does
