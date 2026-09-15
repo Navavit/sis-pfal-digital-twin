@@ -36,6 +36,9 @@ dashboard เดิมบอกได้ว่า *ตัวเลขตอน�
 | [store_manifest.json](../../raw/data/data/processed/store_manifest.json) | เวลาอัปเดตล่าสุดและช่วงข้อมูล |
 | [docs/DATA_DICTIONARY.md](docs/DATA_DICTIONARY.md) | ความหมายของทุกคอลัมน์ |
 
+## ขอบเขตของ repo นี้
+เก็บเฉพาะสิ่งที่ web app ต้องใช้: โค้ด (`app/`, `pfal_twin/`), โมเดลห้องและแผนที่เซ็นเซอร์ (`data/model`, `data/sensors`), ตารางข้อมูล 10 นาที (`data/processed`) และสคริปต์อัปเดต (`scripts/`, `.github/workflows`) — ไฟล์สแกน LiDAR, ภาพถ่ายหน้างาน, แบบแปลน, notebook ของ pipeline และรูปวิเคราะห์ อยู่นอก GitHub (ขอได้จากผู้ดูแลโครงการ)
+
 ## รันเองในเครื่อง
 ```bash
 pip install -r requirements.txt
