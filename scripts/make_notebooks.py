@@ -362,7 +362,6 @@ SHEETS = {
     "IMG_2546": "Fan control box labelled 'lower tier' (tier 1): one FAN switch, 12 V fan",
     "IMG_2547": "Fan control box labelled '4 tiers': switches FAN1-FAN4 = tiers 2-5",
     "IMG_2548": "Fan control box labelled 'nursery plants': 3 switches, for the seed-germination shelf",
-    "IMG_2550": "TP-Link WiFi router (WiFi uplink of the grow controllers)",
     "IMG_2552": "Hand-held Testo 608-H1 on a tray: 22.4 °C / 49.1 % RH at 12:04 (reference reading)",
     "IMG_2584": "White 1-inch line at 0.3 m rises through a red ball valve into the nursery-2 tray (door end of T1-N2), beside the '4 tiers' fan box",
     "IMG_2585": "White 1-inch pipe across the 200 L tank lid with a tee dropping into the tank = pump outlet",

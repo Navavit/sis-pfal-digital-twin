@@ -1,10 +1,11 @@
-# Runtime of the SIS PFAL digital twin + web app (light — no point-cloud libraries; used by Streamlit Cloud)
-numpy
-pandas
-scipy
-matplotlib
-plotly
-pyarrow
-requests
-Pillow
-streamlit>=1.50
+# Runtime of the SIS PFAL digital twin + web app (light — no point-cloud libraries; used by Streamlit Cloud).
+# Compatible-release pins (~=) so a deploy cannot silently pick up a breaking major version.
+numpy~=2.0
+pandas~=2.3
+scipy~=1.13
+matplotlib~=3.9
+plotly~=7.0
+pyarrow~=21.0
+requests~=2.32
+Pillow~=11.3
+streamlit~=1.50
