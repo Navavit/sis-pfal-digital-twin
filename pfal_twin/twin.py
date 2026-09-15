@@ -30,6 +30,10 @@ import pandas as pd
 from . import io, geometry as G, viz, layout, thingsboard as tb, hydraulics as H, schematic as S, models as M, cropviz as CV
 from . import FIG_DIR, PROCESSED
 
+EXTRA_KEYS = ["gc1.ecSetPoint", "gc1.pHSetPoint", "gc2.ecSetPoint", "gc2.pHSetPoint", "gc1.task", "gc2.task", "gc1.stage", "gc2.stage",
+              "gc1.modePumpWater", "gc2.modePumpWater", "gc1.ecDosingCount", "gc2.ecDosingCount", "gc1.pHDosingCount", "gc2.pHDosingCount",
+              "gc1.ambTemperature", "gc2.ambTemperature", "gc1.upTime", "gc2.upTime",
+              "co2.VOC", "co2.humidity", "co2.pressure", "co2.Relay_co2", "gw.waterLevel_1"]
 LIMITS = dict(T_max=30.0, RH_max=85.0, VPD_lo=0.4, VPD_hi=1.6, EC_tol=0.3, pH_lo=5.5, pH_hi=6.5)
 
 
@@ -40,6 +44,7 @@ class TwinState:
     room_T: float; room_RH: float; room_VPD: float
     co2: float; co2_T: float; co2_VPD: float
     ec: dict; ph: dict; led: float; brightness: list; plant_day: dict; pump_on: dict
+    extra: dict = field(default_factory=dict)      # setpoints, VOC, relay, modes ... (raw "alias.key" -> value)
 
     def as_dict(self):
         return self.__dict__
@@ -131,7 +136,8 @@ class DigitalTwin:
                          ec={"growing (gc1)": g("gc1.ec"), "nursery-2 (gc2)": g("gc2.ec")}, ph={"growing (gc1)": g("gc1.ph"), "nursery-2 (gc2)": g("gc2.ph")},
                          led=g("gc1.led"), brightness=[g(f"gc1.currentStageBrightness{i}") for i in range(1, 5)],
                          plant_day={"growing (gc1)": g("gc1.plantDay"), "nursery-2 (gc2)": g("gc2.plantDay")},
-                         pump_on={"gc1": g("gc1.pwmWater") >= 0.5, "gc2": g("gc2.pwmWater") >= 0.5})
+                         pump_on={"gc1": g("gc1.pwmWater") >= 0.5, "gc2": g("gc2.pwmWater") >= 0.5},
+                         extra={k: g(k) for k in EXTRA_KEYS})
 
     # ------------------------------------------------------------------ live (ThingsBoard "latest values")
     def live(self, max_age="24h"):
@@ -147,7 +153,7 @@ class DigitalTwin:
         long = pd.concat(rows, ignore_index=True) if rows else pd.DataFrame(columns=["ts", "key", "value", "device"])
         now = pd.Timestamp.now(tz=tb.TZ); long["age"] = now - long["ts"]
         long["column"] = long["device"] + "." + long["key"]
-        fresh = long[long["age"] <= pd.Timedelta(max_age)]
+        fresh = long[(long["age"] <= pd.Timedelta(max_age)) | long["key"].isin(tb.CONTROL_KEYS)]   # state keys are published on change only
         row = pd.Series(fresh["value"].values, index=fresh["column"].values, dtype=float)
         st = self._state_from_row(row, long["ts"].max() if len(long) else now)
         table = long.set_index("column")[["value", "ts", "age", "device", "key"]].sort_values("ts", ascending=False)
@@ -295,6 +301,57 @@ class DigitalTwin:
                             marker=dict(size=9, color=cs, colorscale="RdYlBu_r", cmin=cmin, cmax=cmax, symbol="diamond", line=dict(color="black", width=1),
                                         colorbar=dict(title=var + unit, x=1.02, xanchor="left", y=0.0, yanchor="bottom", len=0.42, thickness=14)))
 
+    # ------------------------------------------------------------------ hover text (sensor values on the 3-D objects)
+    @staticmethod
+    def _f(v, nd=1, unit=""):
+        return "—" if v is None or v != v else f"{v:.{nd}f}{unit}"
+
+    def _hover_controller(self, st: TwinState, alias: str) -> str:
+        f, x = self._f, st.extra
+        if alias == "co2":
+            rel = x.get("co2.Relay_co2"); rel = "—" if rel != rel else ("ON" if rel >= 0.5 else "off")
+            return (f"<b>CO₂ & environment controller</b><br>CO₂ {f(st.co2, 0, ' ppm')} · valve {rel}<br>"
+                    f"T {f(st.co2_T)} °C · RH {f(x.get('co2.humidity'), 0)} % · VPD {f(st.co2_VPD, 2)} kPa<br>VOC {f(x.get('co2.VOC'), 0)} · p {f(x.get('co2.pressure'))} kPa")
+        if alias in ("gc1", "gc2"):
+            loop = "growing (gc1)" if alias == "gc1" else "nursery-2 (gc2)"
+            name = "Grow controller gc1 — growing stage, 200 L" if alias == "gc1" else "Grow controller gc2 — nursery 2, 100 L"
+            mode = tb.PUMP_MODE.get(x.get(f"{alias}.modePumpWater"), "—")
+            led = "" if alias != "gc1" else f"<br>LED {'—' if st.led != st.led else ('ON' if st.led >= 0.5 else 'off')} · brightness {'/'.join(f(b, 0) for b in st.brightness)} %"
+            up = x.get(f"{alias}.upTime"); up = f(up / 3.6e9 if up == up else up, 1, " h")
+            return (f"<b>{name}</b><br>EC {f(st.ec[loop], 2)} (set {f(x.get(f'{alias}.ecSetPoint'), 2)}) mS/cm · pH {f(st.ph[loop], 2)} (set {f(x.get(f'{alias}.pHSetPoint'), 2)})<br>"
+                    f"circulation pump {'ON' if st.pump_on[alias] else 'off'} ({mode}) · plant day {f(st.plant_day[loop], 0)} · task {f(x.get(f'{alias}.task'), 0)}{led}<br>"
+                    f"doses EC {f(x.get(f'{alias}.ecDosingCount'), 0)} / pH {f(x.get(f'{alias}.pHDosingCount'), 0)} · box T {f(x.get(f'{alias}.ambTemperature'))} °C · uptime {up}")
+        if alias == "gw":
+            return "<b>IoT gateway</b> (5 × XY-MD02 on RS-485)<br>" + "<br>".join(f"ch {c[-2:]}: {f(st.ch_T[c])} °C / {f(st.ch_RH[c], 0)} %" for c in tb.CHANNEL_ORDER)
+        if alias == "waterLevel_1":
+            return f"<b>water-level sensor</b> (200 L tank)<br>reading {f(x.get('gw.waterLevel_1'), 0)} — not connected"
+        return alias
+
+    def _hover_zone(self, st: TwinState, zone: str) -> str:
+        f = self._f; tier = int(zone[1]) if zone[0] == "T" and zone[1].isdigit() else None
+        head = f"<b>{zone}</b> — " + ("nursery tier 1" if tier == 1 else f"growing tier {tier}" if tier else "rack")
+        air = f"room air (mean of 3 wall units): {f(st.room_T)} °C · RH {f(st.room_RH, 0)} % · VPD {f(st.room_VPD, 2)} kPa"
+        if tier == 1:
+            sol = f"nursery-2 solution (gc2): EC {f(st.ec['nursery-2 (gc2)'], 2)} · pH {f(st.ph['nursery-2 (gc2)'], 2)} · pump {'ON' if st.pump_on['gc2'] else 'off'}"
+        else:
+            sol = (f"growing solution (gc1): EC {f(st.ec['growing (gc1)'], 2)} · pH {f(st.ph['growing (gc1)'], 2)} · pump {'ON' if st.pump_on['gc1'] else 'off'}<br>"
+                   f"LED {'—' if st.led != st.led else ('ON' if st.led >= 0.5 else 'off')} · plant day {f(st.plant_day['growing (gc1)'], 0)}")
+        return f"{head}<br>{air}<br>{sol}<br>CO₂ {f(st.co2, 0)} ppm"
+
+    def _hover_equipment(self, st: TwinState, name: str) -> str | None:
+        n = name.lower(); f = self._f
+        if "grow controller gc1" in n or "grow controller gc2" in n:
+            return self._hover_controller(st, "gc1" if "gc1" in n else "gc2")
+        if "growing-stage tank" in n or ("tank" in n and "gc1" in n):
+            return f"EC {f(st.ec['growing (gc1)'], 2)} mS/cm · pH {f(st.ph['growing (gc1)'], 2)} · pump {'ON' if st.pump_on['gc1'] else 'off'}"
+        if "nursery-2 tank" in n:
+            return f"EC {f(st.ec['nursery-2 (gc2)'], 2)} mS/cm · pH {f(st.ph['nursery-2 (gc2)'], 2)} · pump {'ON' if st.pump_on['gc2'] else 'off'}"
+        if "co2 & environment controller" in n:
+            return self._hover_controller(st, "co2")
+        if "ac indoor" in n or "dehumidifier" in n:
+            return f"room air now: {f(st.room_T)} °C · RH {f(st.room_RH, 0)} %"
+        return None
+
     def figure_3d(self, t=None, var="T", cmin=20, cmax=35, show_cloud=False, height=720, st: TwinState | None = None, title_prefix="",
                   pipes=False, compact=True, public=False):
         """Plotly 3-D twin at time t (or at a given TwinState, e.g. from live()): rack coloured by the room mean, XY-MD02 units by value.
@@ -306,9 +363,17 @@ class DigitalTwin:
         room_val = {"T": st.room_T, "RH": st.room_RH, "VPD": st.room_VPD}[var]
         zv = {q["zone"]: room_val for q in self._rack_box}
         others = self.sensors[~self.sensors.key_prefix.isin(tb.CHANNELS.keys())]
-        tr = viz.model_traces(self.model, tier_color="#cccccc", group_legend=compact) + viz.zone_traces(self._rack_box, zv, cmin=cmin, cmax=cmax, unit=unit, opacity=0.55)
-        tr += viz.equipment_traces(self.equipment_inside, opacity=0.2, group_legend=compact)
-        tr += [viz.sensor_trace(others, text=[f"{r.sensor} ({r.placed_on})" for r in others.itertuples()], name="other IoT boxes (hover)", size=5, labels=not compact),
+        zones_tr = viz.zone_traces(self._rack_box, zv, cmin=cmin, cmax=cmax, unit=unit, opacity=0.55)
+        for q, m in zip(self._rack_box, zones_tr):           # rack boxes: full sensor summary on hover
+            m.update(hovertext=self._hover_zone(st, q["zone"]))
+        tr = viz.model_traces(self.model, tier_color="#cccccc", group_legend=compact) + zones_tr
+        eq_tr = viz.equipment_traces(self.equipment_inside, opacity=0.2, group_legend=compact)
+        for r, m in zip(self.equipment_inside.itertuples(), eq_tr):   # tanks / controllers / AC: live values on hover
+            extra = self._hover_equipment(st, r.name)
+            if extra:
+                m.update(hovertext=extra if extra.startswith("<b>") else f"<b>{r.name}</b><br>{extra}")
+        tr += eq_tr
+        tr += [viz.sensor_trace(others, text=[self._hover_controller(st, r.sensor) for r in others.itertuples()], name="other IoT boxes (hover)", size=5, labels=not compact),
                self._unit_trace(st, var, cmin, cmax)]
         on = [lp for lp, v in st.pump_on.items() if v]
         if pipes:
