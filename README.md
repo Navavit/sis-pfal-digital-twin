@@ -39,6 +39,10 @@ dashboard เดิมบอกได้ว่า *ตัวเลขตอน�
 ## ขอบเขตของ repo นี้
 เก็บเฉพาะสิ่งที่ web app ต้องใช้: โค้ด (`app/`, `pfal_twin/`), โมเดลห้องและแผนที่เซ็นเซอร์ (`data/model`, `data/sensors`), ตารางข้อมูล 10 นาที (`data/processed`) และสคริปต์อัปเดต (`scripts/`, `.github/workflows`) — ไฟล์สแกน LiDAR, ภาพถ่ายหน้างาน, แบบแปลน, notebook ของ pipeline และรูปวิเคราะห์ อยู่นอก GitHub (ขอได้จากผู้ดูแลโครงการ)
 
+## Checkpoint / ย้อนเวอร์ชัน
+เวอร์ชันที่ตรวจแล้วว่าใช้งานได้ถูก tag ไว้ (ล่าสุด: `v1.0` = 16 ก.ย. 2026) และ branch `stable` ชี้ที่เวอร์ชันเดียวกัน
+ถ้าเวอร์ชันบน `main` มีปัญหา: (ก) ใน Streamlit Cloud เปลี่ยน branch ของแอปเป็น `stable` ได้ทันที หรือ (ข) ในเครื่อง `git checkout main && git reset --hard v1.0 && git push --force origin main`
+
 ## รันเองในเครื่อง
 ```bash
 pip install -r requirements.txt
