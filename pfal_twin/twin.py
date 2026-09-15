@@ -116,11 +116,14 @@ class DigitalTwin:
         return "\n".join(lines)
 
     # ------------------------------------------------------------------ state at a time
-    def state(self, t, tol="30min") -> TwinState:
-        """Every variable at the 10-min bin nearest to t (NaN if the nearest bin is more than `tol` away)."""
+    def state(self, t, tol="30min", lookback_bins=12) -> TwinState:
+        """Every variable at the 10-min bin nearest to t (NaN if the nearest bin is more than `tol` away).
+        Devices publish each key only when it changes (the CO₂ controller's T/RH/VOC can be 30-60 min apart), so each
+        variable takes its last value within the previous `lookback_bins` bins (2 h) instead of "—" whenever the exact bin is empty."""
         w = self.data
         t = pd.Timestamp(t); t = t.tz_localize(tb.TZ) if t.tzinfo is None else t
-        i = w.index.get_indexer([t], method="nearest")[0]; row = w.iloc[i]
+        i = w.index.get_indexer([t], method="nearest")[0]
+        row = w.iloc[max(0, i - lookback_bins):i + 1].ffill().iloc[-1]
         if abs(w.index[i] - t) > pd.Timedelta(tol):
             row = row * np.nan
         return self._state_from_row(row, w.index[i])
