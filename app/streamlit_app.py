@@ -26,7 +26,7 @@ sys.path.insert(0, str(ROOT))
 import os  # noqa: E402
 os.environ["PYTHONPATH"] = str(ROOT) + os.pathsep + os.environ.get("PYTHONPATH", "")
 NEEDS_PKG = "2026.09.15.9"
-APP_BUILD = "2026-09-15 p"          # shown in the footer so everyone can tell which version is running
+APP_BUILD = "2026-09-15 q"          # shown in the footer so everyone can tell which version is running
 import pfal_twin  # noqa: E402
 if getattr(pfal_twin, "__version__", "") != NEEDS_PKG:
     for _m in [m for m in sys.modules if m == "pfal_twin" or m.startswith("pfal_twin.")]:
@@ -82,7 +82,7 @@ def get_twin(version: str = "", pkg: str = "") -> DigitalTwin:
     return DigitalTwin.load(start=HISTORY_START)
 
 
-HISTORY_START = "2026-06-01"       # the facility went into continuous operation in June 2026; earlier samples are commissioning tests
+HISTORY_START = "2026-06-13"       # continuous operation from 13 June 2026; earlier samples are commissioning tests
 STORE_VERSION = store_version()
 
 
