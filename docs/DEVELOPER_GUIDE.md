@@ -85,6 +85,8 @@ scripts/run_app.sh            # เปิด http://localhost:8501
 ปุ่ม "Pull new data" ใน sidebar = `twin.update_data()` (ดึงส่วนเพิ่มจาก ThingsBoard ลง Parquet ในเครื่อง)
 แอปอ่านไฟล์ที่ notebook 01–04 สร้างเท่านั้น ไม่โหลด point cloud → รันบนเครื่องเล็กได้; การนำขึ้นเว็บสาธารณะดู `docs/DIGITAL_TWIN_PLAN.md` ข้อ 6.1
 
+`scripts/make_cloud_asset.py` — สร้าง `app/assets/pointcloud_scan2.npz` (สแกน 2 ย่อเป็น grid 4 ซม., 1.7 MB) ให้หน้าเว็บแสดง point cloud ได้โดยไม่ต้องมีไฟล์ PLY
+
 ## ติดตั้ง (ครั้งเดียว)
 ```bash
 cd PFAL

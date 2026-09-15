@@ -25,8 +25,8 @@ sys.path.insert(0, str(ROOT))
 # is already loaded (version mismatch), drop it and re-import.
 import os  # noqa: E402
 os.environ["PYTHONPATH"] = str(ROOT) + os.pathsep + os.environ.get("PYTHONPATH", "")
-NEEDS_PKG = "2026.09.15.6"
-APP_BUILD = "2026-09-15 l"          # shown in the footer so everyone can tell which version is running
+NEEDS_PKG = "2026.09.15.7"
+APP_BUILD = "2026-09-15 m"          # shown in the footer so everyone can tell which version is running
 import pfal_twin  # noqa: E402
 if getattr(pfal_twin, "__version__", "") != NEEDS_PKG:
     for _m in [m for m in sys.modules if m == "pfal_twin" or m.startswith("pfal_twin.")]:
@@ -452,7 +452,17 @@ elif page == "History":
 # ============================================================================ LAYOUT
 elif page == "Layout & water":
     st.title("As-built layout and water system")
-    t1, t2, t3, t4, t5 = st.tabs(["Layout (plan + elevation)", "Water-system plan", "Process flow", "Flow animation (3-D)", "Pipe corner detail"])
+    t0, t1, t2, t3, t4, t5 = st.tabs(["LiDAR point cloud", "Layout (plan + elevation)", "Water-system plan", "Process flow", "Flow animation (3-D)", "Pipe corner detail"])
+    with t0:
+        st.markdown("**ที่มาของรูปทรงห้อง · where the geometry comes from** — the room was scanned twice on 13 Sep 2026 with a hand-held LiDAR; "
+                    "this is scan 2 (true colour), aligned to the room frame and thinned to a 4-cm grid. The green slabs and frame are the parametric model "
+                    "the twin uses (room 7.12 × 3.01 × 2.58 m, rack 5.43 × 1.04 m, 5 tiers) — the two scans agree within 5–8 cm.")
+        cc = st.columns([2, 1])
+        npts = cc[0].select_slider("points shown", options=[50000, 100000, 150000, 200000], value=100000, help="fewer points = smoother rotation on a laptop")
+        open_up = cc[1].toggle("hide ceiling and front wall", value=True, help="off = the complete scan, as recorded")
+        fig_pc, meta_pc = tw.cloud_figure(n=npts, height=680, open_up=open_up)
+        st.plotly_chart(fig_pc, **PLOTLY, key=f"cloud_{npts}_{open_up}")
+        st.caption(meta_pc + " · raw scans (119 MB) are kept out of the repository; notebooks 01–02 process them.")
     with t1:
         st.pyplot(static_figure("layout"), width="stretch")
     with t2:
