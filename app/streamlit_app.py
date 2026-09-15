@@ -26,7 +26,7 @@ sys.path.insert(0, str(ROOT))
 import os  # noqa: E402
 os.environ["PYTHONPATH"] = str(ROOT) + os.pathsep + os.environ.get("PYTHONPATH", "")
 NEEDS_PKG = "2026.09.15.3"
-APP_BUILD = "2026-09-15 g"          # shown in the footer so everyone can tell which version is running
+APP_BUILD = "2026-09-15 h"          # shown in the footer so everyone can tell which version is running
 import pfal_twin  # noqa: E402
 if getattr(pfal_twin, "__version__", "") != NEEDS_PKG:
     for _m in [m for m in sys.modules if m == "pfal_twin" or m.startswith("pfal_twin.")]:
@@ -406,14 +406,10 @@ elif page == "History":
     if hist.empty:
         st.info("no data in this range"); st.stop()
 
-    st.markdown("#### Twin at one moment")
+    # time cursor: drives the dotted line on the charts and the (collapsed) 3-D view of that moment
     idx = hist.index
-    pick = st.slider("time", min_value=idx[0].to_pydatetime(), max_value=idx[-1].to_pydatetime(), value=idx[-1].to_pydatetime(), step=pd.Timedelta("10min").to_pytimedelta(), format="DD MMM HH:mm")
+    pick = st.slider("time cursor", min_value=idx[0].to_pydatetime(), max_value=idx[-1].to_pydatetime(), value=idx[-1].to_pydatetime(), step=pd.Timedelta("10min").to_pytimedelta(), format="DD MMM HH:mm")
     state = tw.state(pd.Timestamp(pick))
-    with st.expander(f"values at {state.time:%Y-%m-%d %H:%M} as cards"):
-        state_cards(state, row=hist.loc[state.time] if state.time in hist.index else None)
-    var = colour_picker("var_hist"); lo, hi = RANGES[var]
-    st.plotly_chart(tw.figure_3d(var=var, st=state, cmin=lo, cmax=hi, height=600, public=not extended), **PLOTLY, key=f"hist3d_{var}")
 
     st.markdown("#### Time series")
     import plotly.graph_objects as go
@@ -428,6 +424,11 @@ elif page == "History":
         fig.update_layout(title=g, height=300, margin=dict(l=40, r=20, t=40, b=30), legend=dict(orientation="h", y=-0.25), hovermode="x unified")
         st.plotly_chart(fig, use_container_width=True, key=f"ts_{g}")
 
+    with st.expander(f"3-D twin at the cursor — {state.time:%Y-%m-%d %H:%M} (same view as Live, but for that moment)"):
+        var = colour_picker("var_hist"); lo, hi = RANGES[var]
+        st.plotly_chart(tw.figure_3d(var=var, st=state, cmin=lo, cmax=hi, height=600, public=not extended), **PLOTLY, key=f"hist3d_{var}")
+        with st.expander(f"values at {state.time:%Y-%m-%d %H:%M} as cards"):
+            state_cards(state, row=hist.loc[state.time] if state.time in hist.index else None)
     t1, t2, t3 = st.tabs(["KPI per channel (whole store)", "Events", "Heat-map (whole store)"])
     with t1:
         st.dataframe(tw.kpi(), width="stretch")
