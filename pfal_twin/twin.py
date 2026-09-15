@@ -45,6 +45,7 @@ class TwinState:
     co2: float; co2_T: float; co2_VPD: float
     ec: dict; ph: dict; led: float; brightness: list; plant_day: dict; pump_on: dict
     extra: dict = field(default_factory=dict)      # setpoints, VOC, relay, modes ... (raw "alias.key" -> value)
+    age: dict = field(default_factory=dict)        # "alias.key" -> pd.Timedelta since that value was measured (sparse devices)
 
     def as_dict(self):
         return self.__dict__
@@ -116,19 +117,22 @@ class DigitalTwin:
         return "\n".join(lines)
 
     # ------------------------------------------------------------------ state at a time
-    def state(self, t, tol="30min", lookback_bins=12) -> TwinState:
+    def state(self, t, tol="30min", lookback_bins=144) -> TwinState:
         """Every variable at the 10-min bin nearest to t (NaN if the nearest bin is more than `tol` away).
-        Devices publish each key only when it changes (the CO₂ controller's T/RH/VOC can be 30-60 min apart), so each
-        variable takes its last value within the previous `lookback_bins` bins (2 h) instead of "—" whenever the exact bin is empty."""
+        Devices publish each key only when it changes (the XY-MD02 gateway can be silent for hours), so each variable
+        takes its last value within the previous `lookback_bins` bins (24 h) and remembers how old that value is (`age`)."""
         w = self.data
         t = pd.Timestamp(t); t = t.tz_localize(tb.TZ) if t.tzinfo is None else t
         i = w.index.get_indexer([t], method="nearest")[0]
-        row = w.iloc[max(0, i - lookback_bins):i + 1].ffill().iloc[-1]
+        win = w.iloc[max(0, i - lookback_bins):i + 1]
+        row = win.ffill().iloc[-1]
+        last = win.apply(lambda col: col.last_valid_index())
+        ages = {c: (w.index[i] - ts) for c, ts in last.items() if ts is not None and ts == ts}
         if abs(w.index[i] - t) > pd.Timedelta(tol):
-            row = row * np.nan
-        return self._state_from_row(row, w.index[i])
+            row = row * np.nan; ages = {}
+        return self._state_from_row(row, w.index[i], ages)
 
-    def _state_from_row(self, row: pd.Series, t) -> TwinState:
+    def _state_from_row(self, row: pd.Series, t, ages: dict | None = None) -> TwinState:
         g = lambda k: float(row.get(k, np.nan))
         ch_T = {c: g(f"gw.{c}_t") for c in tb.CHANNEL_ORDER}; ch_RH = {c: g(f"gw.{c}_h") for c in tb.CHANNEL_ORDER}
         ch_VPD = {c: float(tb.vpd_kpa(ch_T[c], ch_RH[c])) for c in tb.CHANNEL_ORDER}
@@ -140,7 +144,7 @@ class DigitalTwin:
                          led=g("gc1.led"), brightness=[g(f"gc1.currentStageBrightness{i}") for i in range(1, 5)],
                          plant_day={"growing (gc1)": g("gc1.plantDay"), "nursery-2 (gc2)": g("gc2.plantDay")},
                          pump_on={"gc1": g("gc1.pwmWater") >= 0.5, "gc2": g("gc2.pwmWater") >= 0.5},
-                         extra={k: g(k) for k in EXTRA_KEYS})
+                         extra={k: g(k) for k in EXTRA_KEYS}, age=dict(ages or {}))
 
     # ------------------------------------------------------------------ live (ThingsBoard "latest values")
     def live(self, max_age="24h"):
@@ -158,7 +162,7 @@ class DigitalTwin:
         long["column"] = long["device"] + "." + long["key"]
         fresh = long[(long["age"] <= pd.Timedelta(max_age)) | long["key"].isin(tb.CONTROL_KEYS)]   # state keys are published on change only
         row = pd.Series(fresh["value"].values, index=fresh["column"].values, dtype=float)
-        st = self._state_from_row(row, long["ts"].max() if len(long) else now)
+        st = self._state_from_row(row, long["ts"].max() if len(long) else now, ages=dict(zip(fresh["column"], fresh["age"])))
         table = long.set_index("column")[["value", "ts", "age", "device", "key"]].sort_values("ts", ascending=False)
         return st, table
 
@@ -298,7 +302,7 @@ class DigitalTwin:
         xs, ys, zs, cs, txt = [], [], [], [], []
         for c, r in self._unit_xyz.iterrows():
             v = vals.get(c, np.nan); xs.append(r.x); ys.append(r.y); zs.append(r.z); cs.append(v if v == v else cmin)
-            txt.append(f"{r.sensor}<br>{tb.channel_label(c)}<br>T {st.ch_T[c]:.1f} °C · RH {st.ch_RH[c]:.0f} % · VPD {st.ch_VPD[c]:.2f} kPa")
+            txt.append(f"<b>{r.sensor}</b><br>{tb.channel_label(c)}<br>T {self._f(st.ch_T[c])} °C · RH {self._f(st.ch_RH[c], 0)} % · VPD {self._f(st.ch_VPD[c], 2)} kPa{self._age(st, f'gw.{c}_t')}")
         return go.Scatter3d(x=xs, y=ys, z=zs, mode="markers+text", text=[c.replace("xy_md_", "ch ") for c in self._unit_xyz.index], textposition="top center",
                             hovertext=txt, hoverinfo="text", name=f"XY-MD02 units ({var})",
                             marker=dict(size=9, color=cs, colorscale="RdYlBu_r", cmin=cmin, cmax=cmax, symbol="diamond", line=dict(color="black", width=1),
@@ -309,6 +313,15 @@ class DigitalTwin:
     def _f(v, nd=1, unit=""):
         return "—" if v is None or v != v else f"{v:.{nd}f}{unit}"
 
+    @staticmethod
+    def _age(st: TwinState, col: str, fresh="30min") -> str:
+        """' · measured 2.5 h ago' when the value shown is older than `fresh`; '' otherwise"""
+        a = st.age.get(col)
+        if a is None or a != a or a <= pd.Timedelta(fresh):
+            return ""
+        sec = a.total_seconds()
+        return " · <i>measured " + (f"{sec / 60:.0f} min" if sec < 5400 else f"{sec / 3600:.1f} h" if sec < 172800 else f"{sec / 86400:.1f} d") + " ago</i>"
+
     @classmethod
     def _sp(cls, v, nd=2):
         """set-point, bold red so it stands out next to the measured value"""
@@ -318,7 +331,7 @@ class DigitalTwin:
         f, x = self._f, st.extra
         if alias == "co2":
             rel = x.get("co2.Relay_co2"); rel = "—" if rel != rel else ("ON" if rel >= 0.5 else "off")
-            return (f"<b>CO₂ & environment controller</b><br>CO₂ {f(st.co2, 0, ' ppm')} · valve {rel}<br>"
+            return (f"<b>CO₂ & environment controller</b><br>CO₂ {f(st.co2, 0, ' ppm')}{self._age(st, 'co2.CO2')} · valve {rel}<br>"
                     f"T {f(st.co2_T)} °C · RH {f(x.get('co2.humidity'), 0)} % · VPD {f(st.co2_VPD, 2)} kPa<br>VOC {f(x.get('co2.VOC'), 0)} · p {f(x.get('co2.pressure'))} kPa")
         if alias in ("gc1", "gc2"):
             loop = "growing (gc1)" if alias == "gc1" else "nursery-2 (gc2)"
@@ -326,11 +339,11 @@ class DigitalTwin:
             mode = tb.PUMP_MODE.get(x.get(f"{alias}.modePumpWater"), "—")
             led = "" if alias != "gc1" else f"<br>LED {'—' if st.led != st.led else ('ON' if st.led >= 0.5 else 'off')} · brightness {'/'.join(f(b, 0) for b in st.brightness)} %"
             up = x.get(f"{alias}.upTime"); up = f(up / 3.6e9 if up == up else up, 1, " h")
-            return (f"<b>{name}</b><br>EC {f(st.ec[loop], 2)} mS/cm ({self._sp(x.get(f'{alias}.ecSetPoint'))}) · pH {f(st.ph[loop], 2)} ({self._sp(x.get(f'{alias}.pHSetPoint'))})<br>"
+            return (f"<b>{name}</b><br>EC {f(st.ec[loop], 2)} mS/cm ({self._sp(x.get(f'{alias}.ecSetPoint'))}) · pH {f(st.ph[loop], 2)} ({self._sp(x.get(f'{alias}.pHSetPoint'))}){self._age(st, f'{alias}.ec')}<br>"
                     f"circulation pump {'ON' if st.pump_on[alias] else 'off'} ({mode}) · plant day {f(st.plant_day[loop], 0)} · task {f(x.get(f'{alias}.task'), 0)}{led}<br>"
                     f"doses EC {f(x.get(f'{alias}.ecDosingCount'), 0)} / pH {f(x.get(f'{alias}.pHDosingCount'), 0)} · box T {f(x.get(f'{alias}.ambTemperature'))} °C · uptime {up}")
         if alias == "gw":
-            return "<b>IoT gateway</b> (5 × XY-MD02 on RS-485)<br>" + "<br>".join(f"ch {c[-2:]}: {f(st.ch_T[c])} °C / {f(st.ch_RH[c], 0)} %" for c in tb.CHANNEL_ORDER)
+            return "<b>IoT gateway</b> (5 × XY-MD02 on RS-485)<br>" + "<br>".join(f"ch {c[-2:]}: {f(st.ch_T[c])} °C / {f(st.ch_RH[c], 0)} %{self._age(st, f'gw.{c}_t')}" for c in tb.CHANNEL_ORDER)
         if alias == "waterLevel_1":
             return f"<b>water-level sensor</b> (200 L tank)<br>reading {f(x.get('gw.waterLevel_1'), 0)} — not connected"
         return alias
@@ -338,7 +351,7 @@ class DigitalTwin:
     def _hover_zone(self, st: TwinState, zone: str) -> str:
         f = self._f; tier = int(zone[1]) if zone[0] == "T" and zone[1].isdigit() else None
         head = f"<b>{zone}</b> — " + ("nursery tier 1" if tier == 1 else f"growing tier {tier}" if tier else "rack")
-        air = f"room air (mean of 3 wall units): {f(st.room_T)} °C · RH {f(st.room_RH, 0)} % · VPD {f(st.room_VPD, 2)} kPa"
+        air = f"room air (mean of 3 wall units): {f(st.room_T)} °C · RH {f(st.room_RH, 0)} % · VPD {f(st.room_VPD, 2)} kPa{self._age(st, 'gw.xy_md_22_t')}"
         x = st.extra
         if tier == 1:
             sol = (f"nursery-2 solution (gc2): EC {f(st.ec['nursery-2 (gc2)'], 2)} ({self._sp(x.get('gc2.ecSetPoint'))}) · "
