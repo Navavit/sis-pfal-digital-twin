@@ -26,7 +26,7 @@ sys.path.insert(0, str(ROOT))
 import os  # noqa: E402
 os.environ["PYTHONPATH"] = str(ROOT) + os.pathsep + os.environ.get("PYTHONPATH", "")
 NEEDS_PKG = "2026.09.15.9"
-APP_BUILD = "2026-09-15 q"          # shown in the footer so everyone can tell which version is running
+APP_BUILD = "2026-09-15 r"          # shown in the footer so everyone can tell which version is running
 import pfal_twin  # noqa: E402
 if getattr(pfal_twin, "__version__", "") != NEEDS_PKG:
     for _m in [m for m in sys.modules if m == "pfal_twin" or m.startswith("pfal_twin.")]:
@@ -76,9 +76,9 @@ def store_version(_nonce: int = 0) -> str:
 
 
 @st.cache_resource(show_spinner="loading digital twin ...")
-def get_twin(version: str = "", pkg: str = "") -> DigitalTwin:
-    """Cached per store version AND package version: after a redeploy Streamlit reloads pfal_twin, but an instance
-    built from the old class would stay in the cache without the new methods."""
+def get_twin(version: str = "", pkg: str = "", cls_id: int = 0) -> DigitalTwin:
+    """Cached per store version, package version AND class identity: after a redeploy / hot reload Streamlit gives us a
+    new DigitalTwin class, and an instance built from the old class must not survive in the cache."""
     return DigitalTwin.load(start=HISTORY_START)
 
 
@@ -91,7 +91,7 @@ def top_up(version: str, _nonce: int = 0):
     """Every 10 min: append what ThingsBoard has since the stored table ended (in memory), so History is never behind
     even when the 30-min GitHub Actions job is delayed."""
     try:
-        return get_twin(version, NEEDS_PKG).top_up()
+        return get_twin(version, NEEDS_PKG, id(DigitalTwin)).top_up()
     except Exception as e:
         return f"top-up failed: {e}"
 
@@ -99,17 +99,18 @@ def top_up(version: str, _nonce: int = 0):
 TOP_UP = top_up(STORE_VERSION, int(time.time() // 600))
 
 
-@st.cache_data(ttl=60, show_spinner=False)
+@st.cache_resource(ttl=60, show_spinner=False)
 def live_snapshot(_nonce: int):
-    """Latest values from ThingsBoard (cached 60 s so many viewers do not hammer the server)."""
-    st_, table = get_twin(STORE_VERSION, NEEDS_PKG).live()
+    """Latest values from ThingsBoard (cached 60 s so many viewers do not hammer the server).
+    cache_resource (no pickling): a TwinState built by a hot-reloaded module cannot be pickled by cache_data."""
+    st_, table = get_twin(STORE_VERSION, NEEDS_PKG, id(DigitalTwin)).live()
     return st_, table
 
 
 @st.cache_data(ttl=60, show_spinner=False)
 def recent_window(hours: int, _nonce: int):
     """Last `hours` hours straight from ThingsBoard (5-min averages, raw pump events) — same window as the dashboard."""
-    return get_twin(STORE_VERSION, NEEDS_PKG).recent(hours=hours, interval_min=5 if hours <= 24 else 15)
+    return get_twin(STORE_VERSION, NEEDS_PKG, id(DigitalTwin)).recent(hours=hours, interval_min=5 if hours <= 24 else 15)
 
 
 def ts_chart(df, cols, title, unit="", height=280, setpoints=None, step=False, subtitle=None):
@@ -166,7 +167,7 @@ def stat_line(d, nd=2):
 def availability_figure(version: str):
     """Per-device data coverage per day (share of 10-min bins with at least one value) -> shows the gaps at a glance."""
     import plotly.graph_objects as go
-    w = get_twin(version, NEEDS_PKG).data
+    w = get_twin(version, NEEDS_PKG, id(DigitalTwin)).data
     w = w[[c for c in w.columns if c.split(".", 1)[1] not in tb.CONTROL_KEYS]]     # measured keys only (control keys are forward-filled)
     av = tb.availability(w, "1D")
     order = [d for d in ("gw", "gc1", "gc2", "co2") if d in av.columns]
@@ -181,7 +182,7 @@ def availability_figure(version: str):
 def full_store_bytes(version: str, fmt: str) -> bytes:
     """Whole 10-min table as CSV or Parquet for the download buttons (cached per store version)."""
     import io as _io
-    w = get_twin(version, NEEDS_PKG).data
+    w = get_twin(version, NEEDS_PKG, id(DigitalTwin)).data
     if fmt == "parquet":
         b = _io.BytesIO(); w.to_parquet(b); return b.getvalue()
     return w.to_csv(float_format="%.3f").encode()
@@ -189,7 +190,7 @@ def full_store_bytes(version: str, fmt: str) -> bytes:
 
 @st.cache_resource(show_spinner="rendering layout ...")
 def static_figure(kind: str):
-    tw = get_twin(STORE_VERSION, NEEDS_PKG)
+    tw = get_twin(STORE_VERSION, NEEDS_PKG, id(DigitalTwin))
     return {"layout": tw.layout_figure, "water": tw.water_plan, "flow": tw.flow_diagram, "corner": tw.corner_detail, "heatmap": tw.heatmap}[kind]()
 
 
@@ -240,7 +241,7 @@ def state_cards(state, ages: dict | None = None, row=None):
 
 
 # ---------------------------------------------------------------------------- sidebar
-tw = get_twin(STORE_VERSION, NEEDS_PKG)
+tw = get_twin(STORE_VERSION, NEEDS_PKG, id(DigitalTwin))
 st.sidebar.markdown(f"**{PROJECT['name']}**  \n<small>{PROJECT['th']}</small>", unsafe_allow_html=True)
 page = st.sidebar.radio("Page", ["Overview", "Live", "History", "Layout & water", "What-if"], label_visibility="collapsed")
 VAR_LABEL = {"T": "air temperature (°C)", "RH": "relative humidity (%)", "VPD": "VPD (kPa)"}
