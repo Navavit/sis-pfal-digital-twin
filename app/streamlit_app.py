@@ -26,7 +26,7 @@ sys.path.insert(0, str(ROOT))
 import os  # noqa: E402
 os.environ["PYTHONPATH"] = str(ROOT) + os.pathsep + os.environ.get("PYTHONPATH", "")
 NEEDS_PKG = "2026.09.15.6"
-APP_BUILD = "2026-09-15 k"          # shown in the footer so everyone can tell which version is running
+APP_BUILD = "2026-09-15 l"          # shown in the footer so everyone can tell which version is running
 import pfal_twin  # noqa: E402
 if getattr(pfal_twin, "__version__", "") != NEEDS_PKG:
     for _m in [m for m in sys.modules if m == "pfal_twin" or m.startswith("pfal_twin.")]:
@@ -118,9 +118,12 @@ def ts_chart(df, cols, title, unit="", height=280, setpoints=None, step=False):
         lab = tb.channel_label(k[3:-2]).split(" — ")[1] if k.startswith("gw.") else k.split(".")[0] + " " + tb.KEY_LABELS.get(k.split(".")[1], k.split(".")[1])
         d = df[k].dropna()
         fig.add_scatter(x=d.index, y=d.values, mode="lines", name=lab, line_shape="hv" if step else "linear", connectgaps=False)
-    for k, lab in (setpoints or {}).items():
+    for k, lab in (setpoints or {}).items():       # set-point: bold red so it stands out against the measured line
         if k in df.columns and df[k].dropna().size:
-            fig.add_scatter(x=df.index, y=df[k].ffill().values, mode="lines", name=lab, line=dict(dash="dash", color="grey"), line_shape="hv")
+            sp = df[k].ffill().bfill(); last = sp.dropna().iloc[-1]        # set-points are published on change only -> hold across the window
+            fig.add_scatter(x=df.index, y=sp.values, mode="lines", name=f"<b>{lab} {last:.2f}</b>", line=dict(color="#c0392b", width=3, dash="dash"), line_shape="hv")
+            fig.add_annotation(x=df.index[-1], y=last, text=f"<b>set {last:.2f}</b>", showarrow=False, xanchor="left", xshift=4, font=dict(color="#c0392b", size=12))
+            fig.update_layout(margin=dict(r=70))
     # title on top, legend directly under it (above the plot) -> never collides with the x-axis date labels
     n = len(fig.data); rows = 1 if n <= 3 else 2 if n <= 6 else 3
     fig.update_layout(title=dict(text=title, y=0.99, yanchor="top", x=0, xanchor="left", font=dict(size=14)), height=height,
@@ -325,8 +328,10 @@ elif page == "Live":
             for dev, nm in (("gc1", "Grow controller gc1 — growing stage, 200 L tank"), ("gc2", "Grow controller gc2 — nursery 2, 100 L tank")):
                 st.markdown(f"**{nm}**")
                 c1, c2, c3 = st.columns([2, 2, 1.4])
-                c1.plotly_chart(ts_chart(R, [f"{dev}.ec"], f"EC (mS/cm) — {stat_line(R.get(f'{dev}.ec', pd.Series(dtype=float)))}", "mS/cm", setpoints={f"{dev}.ecSetPoint": "set-point"}), use_container_width=True, key=f"ts_ec_{dev}")
-                c2.plotly_chart(ts_chart(R, [f"{dev}.ph"], f"pH — {stat_line(R.get(f'{dev}.ph', pd.Series(dtype=float)))}", "pH", setpoints={f"{dev}.pHSetPoint": "set-point"}), use_container_width=True, key=f"ts_ph_{dev}")
+                sp_ec = R.get(f"{dev}.ecSetPoint", pd.Series(dtype=float)).dropna(); sp_ph = R.get(f"{dev}.pHSetPoint", pd.Series(dtype=float)).dropna()
+                red = lambda v: f" · <span style='color:#c0392b'><b>set {v.iloc[-1]:.2f}</b></span>" if v.size else ""
+                c1.plotly_chart(ts_chart(R, [f"{dev}.ec"], f"EC (mS/cm) — {stat_line(R.get(f'{dev}.ec', pd.Series(dtype=float)))}{red(sp_ec)}", "mS/cm", setpoints={f"{dev}.ecSetPoint": "EC set-point"}), use_container_width=True, key=f"ts_ec_{dev}")
+                c2.plotly_chart(ts_chart(R, [f"{dev}.ph"], f"pH — {stat_line(R.get(f'{dev}.ph', pd.Series(dtype=float)))}{red(sp_ph)}", "pH", setpoints={f"{dev}.pHSetPoint": "pH set-point"}), use_container_width=True, key=f"ts_ph_{dev}")
                 c3.plotly_chart(dose_chart(R, dev, height=280), use_container_width=True, key=f"dose_{dev}")
             if extended:
                 st.plotly_chart(ts_chart(R, ["gc1.led", "gc1.pwmWater", "gc2.pwmWater", "co2.Relay_co2"], "LED / circulation pumps / CO₂ valve (beyond the dashboard)", "on = 1", step=True, height=220), use_container_width=True, key="ts_ctrl")
@@ -419,7 +424,10 @@ elif page == "History":
         fig = go.Figure()
         for k in cols:
             lab = tb.channel_label(k[3:-2]) + k[-2:] if k.startswith("gw.") else (k.split(".")[0] + " " + tb.KEY_LABELS.get(k.split(".")[1], k.split(".")[1]))
-            fig.add_scatter(x=D.index, y=D[k], mode="lines", name=lab, connectgaps=False, line_shape="hv" if ("mode" in k or "Time" in k or "Waiting" in k or "shots" in k) else "linear")
+            is_sp = "SetPoint" in k
+            fig.add_scatter(x=D.index, y=D[k].ffill().bfill() if is_sp else D[k], mode="lines", name=f"<b>{lab}</b>" if is_sp else lab, connectgaps=is_sp,
+                            line=dict(color="#c0392b", width=3, dash="dash") if is_sp else None,
+                            line_shape="hv" if (is_sp or "mode" in k or "Time" in k or "Waiting" in k or "shots" in k) else "linear")
         fig.add_vline(x=pd.Timestamp(pick), line_dash="dot", line_color="grey")
         fig.update_layout(title=g, height=300, margin=dict(l=40, r=20, t=40, b=30), legend=dict(orientation="h", y=-0.25), hovermode="x unified")
         st.plotly_chart(fig, use_container_width=True, key=f"ts_{g}")
