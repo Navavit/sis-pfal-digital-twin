@@ -306,6 +306,11 @@ class DigitalTwin:
     def _f(v, nd=1, unit=""):
         return "—" if v is None or v != v else f"{v:.{nd}f}{unit}"
 
+    @classmethod
+    def _sp(cls, v, nd=2):
+        """set-point, bold red so it stands out next to the measured value"""
+        return f"<span style='color:#c0392b'><b>set {cls._f(v, nd)}</b></span>"
+
     def _hover_controller(self, st: TwinState, alias: str) -> str:
         f, x = self._f, st.extra
         if alias == "co2":
@@ -318,7 +323,7 @@ class DigitalTwin:
             mode = tb.PUMP_MODE.get(x.get(f"{alias}.modePumpWater"), "—")
             led = "" if alias != "gc1" else f"<br>LED {'—' if st.led != st.led else ('ON' if st.led >= 0.5 else 'off')} · brightness {'/'.join(f(b, 0) for b in st.brightness)} %"
             up = x.get(f"{alias}.upTime"); up = f(up / 3.6e9 if up == up else up, 1, " h")
-            return (f"<b>{name}</b><br>EC {f(st.ec[loop], 2)} (set {f(x.get(f'{alias}.ecSetPoint'), 2)}) mS/cm · pH {f(st.ph[loop], 2)} (set {f(x.get(f'{alias}.pHSetPoint'), 2)})<br>"
+            return (f"<b>{name}</b><br>EC {f(st.ec[loop], 2)} mS/cm ({self._sp(x.get(f'{alias}.ecSetPoint'))}) · pH {f(st.ph[loop], 2)} ({self._sp(x.get(f'{alias}.pHSetPoint'))})<br>"
                     f"circulation pump {'ON' if st.pump_on[alias] else 'off'} ({mode}) · plant day {f(st.plant_day[loop], 0)} · task {f(x.get(f'{alias}.task'), 0)}{led}<br>"
                     f"doses EC {f(x.get(f'{alias}.ecDosingCount'), 0)} / pH {f(x.get(f'{alias}.pHDosingCount'), 0)} · box T {f(x.get(f'{alias}.ambTemperature'))} °C · uptime {up}")
         if alias == "gw":
@@ -331,10 +336,13 @@ class DigitalTwin:
         f = self._f; tier = int(zone[1]) if zone[0] == "T" and zone[1].isdigit() else None
         head = f"<b>{zone}</b> — " + ("nursery tier 1" if tier == 1 else f"growing tier {tier}" if tier else "rack")
         air = f"room air (mean of 3 wall units): {f(st.room_T)} °C · RH {f(st.room_RH, 0)} % · VPD {f(st.room_VPD, 2)} kPa"
+        x = st.extra
         if tier == 1:
-            sol = f"nursery-2 solution (gc2): EC {f(st.ec['nursery-2 (gc2)'], 2)} · pH {f(st.ph['nursery-2 (gc2)'], 2)} · pump {'ON' if st.pump_on['gc2'] else 'off'}"
+            sol = (f"nursery-2 solution (gc2): EC {f(st.ec['nursery-2 (gc2)'], 2)} ({self._sp(x.get('gc2.ecSetPoint'))}) · "
+                   f"pH {f(st.ph['nursery-2 (gc2)'], 2)} ({self._sp(x.get('gc2.pHSetPoint'))}) · pump {'ON' if st.pump_on['gc2'] else 'off'}")
         else:
-            sol = (f"growing solution (gc1): EC {f(st.ec['growing (gc1)'], 2)} · pH {f(st.ph['growing (gc1)'], 2)} · pump {'ON' if st.pump_on['gc1'] else 'off'}<br>"
+            sol = (f"growing solution (gc1): EC {f(st.ec['growing (gc1)'], 2)} ({self._sp(x.get('gc1.ecSetPoint'))}) · "
+                   f"pH {f(st.ph['growing (gc1)'], 2)} ({self._sp(x.get('gc1.pHSetPoint'))}) · pump {'ON' if st.pump_on['gc1'] else 'off'}<br>"
                    f"LED {'—' if st.led != st.led else ('ON' if st.led >= 0.5 else 'off')} · plant day {f(st.plant_day['growing (gc1)'], 0)}")
         return f"{head}<br>{air}<br>{sol}<br>CO₂ {f(st.co2, 0)} ppm"
 
@@ -342,10 +350,13 @@ class DigitalTwin:
         n = name.lower(); f = self._f
         if "grow controller gc1" in n or "grow controller gc2" in n:
             return self._hover_controller(st, "gc1" if "gc1" in n else "gc2")
-        if "growing-stage tank" in n or ("tank" in n and "gc1" in n):
-            return f"EC {f(st.ec['growing (gc1)'], 2)} mS/cm · pH {f(st.ph['growing (gc1)'], 2)} · pump {'ON' if st.pump_on['gc1'] else 'off'}"
-        if "nursery-2 tank" in n:
-            return f"EC {f(st.ec['nursery-2 (gc2)'], 2)} mS/cm · pH {f(st.ph['nursery-2 (gc2)'], 2)} · pump {'ON' if st.pump_on['gc2'] else 'off'}"
+        x = st.extra
+        if "growing-stage tank" in n or ("tank" in n and "gc1" in n) or "dosing box b" in n:
+            return (f"EC {f(st.ec['growing (gc1)'], 2)} mS/cm ({self._sp(x.get('gc1.ecSetPoint'))}) · pH {f(st.ph['growing (gc1)'], 2)} ({self._sp(x.get('gc1.pHSetPoint'))}) · "
+                    f"pump {'ON' if st.pump_on['gc1'] else 'off'}")
+        if "nursery-2 tank" in n or "dosing box a" in n:
+            return (f"EC {f(st.ec['nursery-2 (gc2)'], 2)} mS/cm ({self._sp(x.get('gc2.ecSetPoint'))}) · pH {f(st.ph['nursery-2 (gc2)'], 2)} ({self._sp(x.get('gc2.pHSetPoint'))}) · "
+                    f"pump {'ON' if st.pump_on['gc2'] else 'off'}")
         if "co2 & environment controller" in n:
             return self._hover_controller(st, "co2")
         if "ac indoor" in n or "dehumidifier" in n:
