@@ -22,3 +22,6 @@ data/processed/*.parquet
 # 1 MB 10-min table: KEPT so the web app has data on deploy
 !data/processed/iot_10min.parquet
 figures/html/
+
+# --- manuscript drafts stay private until submission
+paper/
