@@ -26,7 +26,7 @@ sys.path.insert(0, str(ROOT))
 import os  # noqa: E402
 os.environ["PYTHONPATH"] = str(ROOT) + os.pathsep + os.environ.get("PYTHONPATH", "")
 NEEDS_PKG = "2026.09.15.9"
-APP_BUILD = "2026-09-15 s"          # shown in the footer so everyone can tell which version is running
+APP_BUILD = "2026-09-16 a"          # shown in the footer so everyone can tell which version is running
 import pfal_twin  # noqa: E402
 if getattr(pfal_twin, "__version__", "") != NEEDS_PKG:
     for _m in [m for m in sys.modules if m == "pfal_twin" or m.startswith("pfal_twin.")]:
@@ -243,7 +243,10 @@ def state_cards(state, ages: dict | None = None, row=None):
 # ---------------------------------------------------------------------------- sidebar
 tw = get_twin(STORE_VERSION, NEEDS_PKG, id(DigitalTwin))
 st.sidebar.markdown(f"**{PROJECT['name']}**  \n<small>{PROJECT['th']}</small>", unsafe_allow_html=True)
-page = st.sidebar.radio("Page", ["Overview", "Live", "History", "Layout & water", "What-if"], label_visibility="collapsed")
+PAGES = {"Overview": "ภาพรวม (Overview)", "Live": "ข้อมูลสด (Live)", "History": "ข้อมูลย้อนหลัง (History)",
+         "Layout & water": "ผังห้องและระบบน้ำ (Layout & water)", "What-if": "จำลองสถานการณ์ (What-if)"}
+_label = st.sidebar.radio("Page", list(PAGES.values()), label_visibility="collapsed")
+page = {v: k for k, v in PAGES.items()}[_label]
 VAR_LABEL = {"T": "air temperature (°C)", "RH": "relative humidity (%)", "VPD": "VPD (kPa)"}
 
 
@@ -269,7 +272,7 @@ with st.sidebar.expander("about"):
 # ============================================================================ OVERVIEW
 if page == "Overview":
     PH = ASSETS / "photos"
-    st.title("SIS PFAL Digital Twin")
+    st.title("ภาพรวม · SIS PFAL Digital Twin")
     st.markdown(f"**{PROJECT['th']}**  \n{PROJECT['en']}")
     st.image(str(PH / "IMG_2413.jpg"), caption="SIS PFAL in production — five tiers of leafy greens under LED bars (growing stage on tiers 2–5, nursery on tier 1)", width="stretch")
     c1, c2, c3 = st.columns(3)
@@ -303,7 +306,7 @@ Digital twin = แบบจำลองห้องปลูกจริง (ร
 # ============================================================================ LIVE
 elif page == "Live":
     top = st.columns([2.2, 1, 1, 1.2])
-    top[0].title("Live")
+    top[0].title("ข้อมูลสด (Live)")
     auto = top[1].toggle("auto-refresh 60 s", value=True)
     if top[2].button("refresh now"):
         live_snapshot.clear(); recent_window.clear()
@@ -370,7 +373,7 @@ elif page == "Live":
 
 # ============================================================================ HISTORY
 elif page == "History":
-    st.title("History — browse the stored 10-min data")
+    st.title("ข้อมูลย้อนหลัง (History)")
     days = (d1 - d0).days
     _lm = (st.session_state.get("store_status") or {}).get("local") or {}
     upd = f" · store updated {pd.Timestamp(_lm['updated_at']).tz_convert(TZ):%d %b %Y %H:%M}" if _lm.get("updated_at") else ""
@@ -467,7 +470,7 @@ elif page == "History":
 
 # ============================================================================ LAYOUT
 elif page == "Layout & water":
-    st.title("As-built layout and water system")
+    st.title("ผังห้องและระบบน้ำ (Layout & water)")
     t0, t1, t2, t3, t4, t5 = st.tabs(["LiDAR point cloud", "Layout (plan + elevation)", "Water-system plan", "Process flow", "Flow animation (3-D)", "Pipe corner detail"])
     with t0:
         st.markdown("**ที่มาของรูปทรงห้อง · where the geometry comes from** — the room was scanned twice on 13 Sep 2026 with a hand-held LiDAR; "
@@ -497,7 +500,7 @@ elif page == "Layout & water":
 
 # ============================================================================ WHAT-IF
 elif page == "What-if":
-    st.title("What-if")
+    st.title("จำลองสถานการณ์ (What-if)")
     tab_crop, tab_light = st.tabs(["Crop mix on the 700 holes (tiers 2–5)", "Light / energy scenarios"])
     with tab_crop:
         with st.expander("วิธีใช้ · How to use", expanded=True):
