@@ -1,5 +1,5 @@
 """SIS PFAL digital-twin web dashboard (Streamlit) — a thin UI over `pfal_twin.twin.DigitalTwin`.
-โรงประลอง (Fab Lab) project · School of Integrated Science, Kasetsart University.
+โรงประลอง (Fab Lab) · School of Integrated Science, Kasetsart University.
 
     streamlit run app/streamlit_app.py
 
@@ -39,7 +39,7 @@ from pfal_twin import thingsboard as tb, models as M, store  # noqa: E402
 
 ASSETS = Path(__file__).resolve().parent / "assets"
 PROJECT = dict(name="SIS PFAL Digital Twin", th="โรงประลอง · วิทยาลัยบูรณาการศาสตร์ มหาวิทยาลัยเกษตรศาสตร์",
-               en="Fab Lab project · School of Integrated Science, Kasetsart University")
+               en="Fab Lab · School of Integrated Science, Kasetsart University")
 st.set_page_config(page_title=PROJECT["name"], layout="wide", page_icon=str(ASSETS / "favicon.png"))
 st.logo(str(ASSETS / "sis_logo.png"), size="large", link="https://sis.ku.ac.th")
 FONT = "IBM Plex Sans Thai"   # loopless (ไม่มีหัว) Thai + Latin in one family
