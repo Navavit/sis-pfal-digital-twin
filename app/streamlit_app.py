@@ -268,6 +268,8 @@ with st.sidebar.expander("about"):
     st.code(tw.summary(), language=None)
     st.markdown(f"{PROJECT['en']}  \nSIS PFAL = plant factory with artificial lighting at the School of Integrated Science.  \n"
                 "Source: ThingsBoard public dashboard *Vertical Smart Farming* (cat-smartgrow.com). Geometry from the LiDAR scan of 2026-09-13.")
+st.sidebar.caption("ผู้สนับสนุน (Sponsor)")
+st.sidebar.image(str(ASSETS / "civic_agrotech_logo.png"), width=110, caption="CIVIC Agrotech")
 
 # ============================================================================ OVERVIEW
 if page == "Overview":
@@ -569,4 +571,7 @@ elif page == "What-if":
 
 # ---------------------------------------------------------------------------- footer
 st.divider()
-st.caption(f"**{PROJECT['name']}** — {PROJECT['th']}  \n{PROJECT['en']}  \n<small>build {APP_BUILD} · pfal_twin {pfal_twin.__version__}</small>", unsafe_allow_html=True)
+_f1, _f2 = st.columns([5, 1], vertical_alignment="center")
+_f1.caption(f"**{PROJECT['name']}** — {PROJECT['th']}  \n{PROJECT['en']}  \n<small>build {APP_BUILD} · pfal_twin {pfal_twin.__version__}</small>", unsafe_allow_html=True)
+_f2.caption("Sponsored by")
+_f2.image(str(ASSETS / "civic_agrotech_logo.png"), width=90)
