@@ -17,7 +17,7 @@ import json
 import numpy as np
 import pandas as pd
 
-from .sqlapi import SqlApi
+from .sqlapi import SqlApi, SqlApiError
 
 TZ = "Asia/Bangkok"
 LONG_T, WIDE_T, META_T = "iot_long", "iot_10min", "store_meta"
@@ -160,4 +160,31 @@ def pull_wide(db: SqlApi, since=None, page_rows: int = 5000) -> pd.DataFrame:
     df.index.name = None
     df = df.apply(pd.to_numeric, errors="coerce").astype(float)  # the API returns numbers as strings
     df.columns = [app_col(c) for c in df.columns]
+    return df
+
+
+def pull_long(db: SqlApi, since=None, window: str = "2D") -> pd.DataFrame:
+    """Raw samples (ts, device, key, value) from `since` on, fetched in time windows (~10k rows each; halved on HTTP 500)."""
+    lo = pd.Timestamp(db.select(f"SELECT MIN(ts) AS t FROM {LONG_T}")[0]["t"] or "2100-01-01") if since is None else \
+        pd.Timestamp(since).tz_convert(TZ).tz_localize(None)
+    hi = pd.Timestamp.now(tz=TZ).tz_localize(None) + pd.Timedelta("1D")
+    frames, step = [], pd.Timedelta(window)
+    while lo < hi:
+        nxt = lo + step
+        a, b = _ts_sql(pd.DatetimeIndex([lo, nxt]), ms=True)
+        try:
+            rows = db.select(f"SELECT ts, device, metric, value FROM {LONG_T} WHERE ts >= '{a}' AND ts < '{b}' ORDER BY ts, device, metric")
+        except SqlApiError as e:  # HTTP 500 = response too big for the API server: halve the window and retry
+            if "HTTP 500" in str(e) and step > pd.Timedelta("1h"):
+                step /= 2
+                continue
+            raise
+        if rows:
+            frames.append(pd.DataFrame(rows))
+        lo = nxt
+    if not frames:
+        return pd.DataFrame({"ts": pd.DatetimeIndex([], tz=TZ), "device": [], "key": [], "value": []})
+    df = pd.concat(frames, ignore_index=True).rename(columns={"metric": "key"})
+    df["ts"] = pd.to_datetime(df["ts"]).dt.tz_localize(TZ)
+    df["value"] = pd.to_numeric(df["value"], errors="coerce")
     return df

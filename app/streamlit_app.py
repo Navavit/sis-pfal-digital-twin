@@ -181,12 +181,21 @@ def availability_figure(version: str):
 
 @st.cache_data(show_spinner=False)
 def full_store_bytes(version: str, fmt: str) -> bytes:
-    """Whole 10-min table as CSV or Parquet for the download buttons (cached per store version)."""
+    """Whole 10-min table (from the first sample, not only the shown period) as CSV or Parquet (cached per store version)."""
     import io as _io
-    w = get_twin(version, NEEDS_PKG, id(DigitalTwin)).data
+    w = pd.read_parquet(store.WIDE)
     if fmt == "parquet":
         b = _io.BytesIO(); w.to_parquet(b); return b.getvalue()
     return w.to_csv(float_format="%.3f").encode()
+
+
+@st.cache_data(show_spinner="reading raw samples from the database ...", max_entries=1)
+def raw_store_bytes(version: str) -> bytes:
+    """All raw samples (ts, device, key, value) as Parquet, read from the SQL database on request."""
+    import io as _io
+    from pfal_twin import dbstore
+    from pfal_twin.sqlapi import SqlApi
+    b = _io.BytesIO(); dbstore.pull_long(SqlApi.from_secrets()).to_parquet(b); return b.getvalue()
 
 
 @st.cache_resource(show_spinner="rendering layout ...")
@@ -391,17 +400,24 @@ elif page == "History":
     _lm = (st.session_state.get("store_status") or {}).get("local") or {}
     upd = f" · store updated {pd.Timestamp(_lm['updated_at']).tz_convert(TZ):%d %b %Y %H:%M}" if _lm.get("updated_at") else ""
     st.markdown(f"**ข้อมูลมีตั้งแต่ · data available from {d0:%d %b %Y %H:%M} → {d1:%d %b %Y %H:%M}** ({days} days, {len(tw.data):,} × 10-min bins, {tw.data.shape[1]} columns){upd}  \n"
-                f"Shown from {pd.Timestamp(HISTORY_START):%d %b %Y} (start of continuous operation; earlier commissioning samples are in the full store on GitHub). "
-                "Store refreshed by GitHub Actions every 30 min + topped up from ThingsBoard every 10 min; grey days below = the device sent nothing that day.")
+                f"Shown from {pd.Timestamp(HISTORY_START):%d %b %Y} (start of continuous operation; earlier commissioning samples are in the full store — download below). "
+                "Store (SIS PFAL SQL database) refreshed every 30 min + topped up from ThingsBoard every 10 min; grey days below = the device sent nothing that day.")
     st.plotly_chart(availability_figure(STORE_VERSION), use_container_width=True, key="availability")
     with st.expander("⬇ download the whole store · ดาวน์โหลดข้อมูลทั้งหมด"):
         st.markdown("Columns are `device.key` (e.g. `gw.xy_md_21_t` = temperature of XY-MD02 unit 21, `gc1.ec` = EC of the growing-stage controller); "
-                    "time index is Asia/Bangkok; see [docs/DATA_DICTIONARY.md](https://github.com/Navavit/sis-pfal-digital-twin/blob/main/docs/DATA_DICTIONARY.md).")
-        b1, b2, b3 = st.columns(3)
+                    "time index is Asia/Bangkok; the data dictionary explains every column. "
+                    "Source: the SIS PFAL SQL database (tables `iot_10min`, `iot_long`), from the first sample on.")
+        b1, b2, b3, b4 = st.columns(4)
         b1.download_button("10-min table — CSV", full_store_bytes(STORE_VERSION, "csv"), file_name=f"sis_pfal_10min_{d0:%Y%m%d}_{d1:%Y%m%d}.csv", mime="text/csv", use_container_width=True)
         b2.download_button("10-min table — Parquet", full_store_bytes(STORE_VERSION, "parquet"), file_name=f"sis_pfal_10min_{d0:%Y%m%d}_{d1:%Y%m%d}.parquet", mime="application/octet-stream", use_container_width=True)
-        b3.link_button("raw samples — Parquet on GitHub (13 MB)", f"https://github.com/{store.REPO}/raw/{store.BRANCH}/data/raw/iot/thingsboard_long.parquet", use_container_width=True)
-        st.caption(f"Same files on GitHub, branch `{store.BRANCH}`: https://github.com/{store.REPO}/tree/{store.BRANCH}")
+        b4.download_button("data dictionary (Markdown)", (ROOT / "docs" / "DATA_DICTIONARY.md").read_bytes(), file_name="SIS_PFAL_DATA_DICTIONARY.md", mime="text/markdown", use_container_width=True)
+        if b3.button("raw samples — prepare Parquet (~11 MB)", use_container_width=True, help="read all raw samples from the database (takes ~20 s)"):
+            st.session_state["raw_ready"] = True
+        if st.session_state.get("raw_ready"):
+            try:
+                b3.download_button("⬇ raw samples — Parquet", raw_store_bytes(STORE_VERSION), file_name="sis_pfal_raw_samples.parquet", mime="application/octet-stream", use_container_width=True)
+            except Exception as e:
+                b3.error(f"database unavailable: {str(e)[:120]}")
     c = st.columns([1, 1, 1, 2])
     start = c[0].date_input("from", value=(d1 - pd.Timedelta(days=7)).date(), min_value=d0.date(), max_value=d1.date())
     end = c[1].date_input("to", value=d1.date(), min_value=d0.date(), max_value=d1.date())
