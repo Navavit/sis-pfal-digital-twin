@@ -24,17 +24,17 @@ dashboard เดิมบอกได้ว่า *ตัวเลขตอน�
 
 ## ข้อมูลมาจากไหน / เก็บไว้ที่ไหน
 - **ค่าสด**: ดึงตรงจาก ThingsBoard (dashboard *Vertical Smart Farming* ของ Civic Agrotech) ทุก 60 วินาที
-- **ประวัติ**: GitHub Actions ดึงข้อมูลใหม่จาก ThingsBoard **ทุก 30 นาที** แล้วเก็บไว้ที่ branch [`data`](../../tree/data) ของ repo นี้ (ตาราง 10 นาที + ข้อมูลดิบ ตั้งแต่ 26 ธ.ค. 2025; แอปแสดงตั้งแต่ **13 มิ.ย. 2026** ซึ่งเป็นวันเริ่มเดินระบบต่อเนื่อง) — แอปตรวจของใหม่ทุก 10 นาที
+- **ประวัติ**: GitHub Actions ดึงข้อมูลใหม่จาก ThingsBoard **ทุก 30 นาที** แล้วเก็บลง **ฐานข้อมูล SIS PFAL** (MariaDB `pfal` ผ่าน PFAL SQL API ของวิทยาลัยฯ — ตาราง `iot_10min`, `iot_long`, `store_meta`) และสำรองไว้ที่ branch [`data`](../../tree/data) ของ repo นี้ (ตาราง 10 นาที + ข้อมูลดิบ ตั้งแต่ 26 ธ.ค. 2025; แอปแสดงตั้งแต่ **13 มิ.ย. 2026** ซึ่งเป็นวันเริ่มเดินระบบต่อเนื่อง) — แอปอ่านจากฐานข้อมูลทุก 10 นาที ถ้าต่อไม่ได้จะใช้ branch `data` แทน
+- **รหัสฐานข้อมูล**: `.streamlit/secrets.toml` ในเครื่อง (ส่วน `[pfal_db]`, ไม่ถูก commit), GitHub secrets `PFAL_DB_USER` / `PFAL_DB_PASS` และ Secrets ของแอปบน Streamlit Cloud — ตรวจการเชื่อมต่อด้วย `scripts/check_db.py`
 - **รูปทรงห้อง**: จากการสแกน LiDAR หน้างาน 13 ก.ย. 2026 (ไฟล์สแกนและภาพถ่ายไม่อยู่ใน repo)
 
 ## ดาวน์โหลดข้อมูล
-ข้อมูลทั้งหมดเปิดให้ดาวน์โหลด (อัปเดตทุก 30 นาที) — ตั้งแต่ **26 ธ.ค. 2025** ถึงปัจจุบัน
-| ไฟล์ | เนื้อหา |
+หน้า **History** ของแอป → "download the whole store" — ตั้งแต่ **26 ธ.ค. 2025** ถึงปัจจุบัน (อัปเดตทุก 30 นาที)
+| ปุ่ม | เนื้อหา |
 |---|---|
-| [iot_10min.parquet](../../raw/data/data/processed/iot_10min.parquet) | ตาราง 10 นาที ทุกตัวแปร (≈2 MB) — หรือกด "download the whole store" ในหน้า History ของแอปเพื่อรับเป็น CSV |
-| [thingsboard_long.parquet](../../raw/data/data/raw/iot/thingsboard_long.parquet) | ข้อมูลดิบทุกตัวอย่างตามที่อุปกรณ์ส่ง (≈13 MB) |
-| [store_manifest.json](../../raw/data/data/processed/store_manifest.json) | เวลาอัปเดตล่าสุดและช่วงข้อมูล |
-| [docs/DATA_DICTIONARY.md](docs/DATA_DICTIONARY.md) | ความหมายของทุกคอลัมน์ |
+| 10-min table — CSV / Parquet | ตาราง 10 นาที ทุกตัวแปร |
+| raw samples | ข้อมูลดิบทุกตัวอย่างตามที่อุปกรณ์ส่ง (≈11 MB, อ่านจากฐานข้อมูลเมื่อกด) |
+| data dictionary | ความหมายของทุกคอลัมน์ ([docs/DATA_DICTIONARY.md](docs/DATA_DICTIONARY.md)) |
 
 ## ขอบเขตของ repo นี้
 เก็บเฉพาะสิ่งที่ web app ต้องใช้: โค้ด (`app/`, `pfal_twin/`), โมเดลห้องและแผนที่เซ็นเซอร์ (`data/model`, `data/sensors`), ตารางข้อมูล 10 นาที (`data/processed`) และสคริปต์อัปเดต (`scripts/`, `.github/workflows`) — ไฟล์สแกน LiDAR, ภาพถ่ายหน้างาน, แบบแปลน, notebook ของ pipeline และรูปวิเคราะห์ อยู่นอก GitHub (ขอได้จากผู้ดูแลโครงการ)
