@@ -1,5 +1,8 @@
 """Where the IoT history lives when the app runs in the cloud.
 
+Primary: the SIS PFAL SQL database (dbstore.py). GitHub Actions publishes to it every 30 min and `sync()` tops the
+local 10-min table up from it. Backup / fallback: the `data` branch below, used when the database cannot be reached.
+
 GitHub Actions (.github/workflows/update_data.yml) pulls new telemetry from ThingsBoard every 30 min and force-pushes
 the store to the orphan branch `data` of the repo (one commit, history discarded, so the repo never grows):
 
@@ -62,3 +65,36 @@ def sync_from_github(force: bool = False, with_long: bool = False, timeout=60) -
         dst.parent.mkdir(parents=True, exist_ok=True); dst.write_bytes(r.content)
     MANIFEST.write_text(json.dumps(rm, indent=1))
     return dict(action="downloaded", local=rm, remote=rm)
+
+
+def sync_from_db(force: bool = False, overlap: str = "3D") -> dict:
+    """Top the local 10-min table up from the SQL database if it holds a newer store (re-reads the last `overlap`,
+    whose bins change as late samples arrive; everything when there is no local copy or force=True)."""
+    from . import dbstore
+    from .sqlapi import SqlApi
+    db = SqlApi.from_secrets()
+    rm, lm = dbstore.remote_manifest(db), local_manifest()
+    if rm is None:
+        raise RuntimeError("database has no store yet")
+    if not force and lm and lm.get("updated_at", "") >= rm.get("updated_at", "") and WIDE.exists():
+        return dict(action="up-to-date (database)", local=lm, remote=rm)
+    if WIDE.exists() and not force:
+        old = pd.read_parquet(WIDE)
+        since = old.index.max() - pd.Timedelta(overlap)
+        w = pd.concat([old[old.index < since], dbstore.pull_wide(db, since)])
+    else:
+        w = dbstore.pull_wide(db)
+    WIDE.parent.mkdir(parents=True, exist_ok=True)
+    w.to_parquet(WIDE)
+    MANIFEST.write_text(json.dumps(rm, indent=1))
+    return dict(action="updated from database", local=rm, remote=rm)
+
+
+def sync() -> dict:
+    """Database first; GitHub `data` branch if the database is unreachable or not configured."""
+    try:
+        return sync_from_db()
+    except Exception as e:
+        r = sync_from_github()
+        r["action"] = f"{r['action']} (GitHub; database unavailable: {str(e)[:120]})"
+        return r

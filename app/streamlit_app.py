@@ -64,11 +64,12 @@ if st_cache_clear:
 
 @st.cache_data(ttl=600, show_spinner=False)
 def store_version(_nonce: int = 0) -> str:
-    """Every 10 min: if the `data` branch on GitHub has a newer store than the local file, download it.
+    """Every 10 min: if the SQL database (or, as a fallback, the `data` branch on GitHub) has a newer store than the
+    local file, top the local copy up.
     Returns the manifest timestamp that identifies the store version (keys the twin cache)."""
     try:
-        r = store.sync_from_github()
-    except Exception as e:  # GitHub unreachable -> keep the local copy
+        r = store.sync()
+    except Exception as e:  # database and GitHub unreachable -> keep the local copy
         r = dict(action=f"error: {e}", local=store.local_manifest())
     st.session_state["store_status"] = r
     lm = r.get("local") or {}

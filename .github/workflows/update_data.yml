@@ -1,7 +1,8 @@
 name: update-data
 
 # Pull new telemetry from ThingsBoard every 30 min and publish the store to the orphan branch `data`
-# (single commit, force-pushed -> the repository does not grow). The web app polls that branch.
+# (single commit, force-pushed -> the repository does not grow) and to the SIS PFAL SQL database (pfal_twin/dbstore.py).
+# The web app reads the database and falls back to the branch.
 on:
   schedule:
     - cron: "*/30 * * * *"
@@ -53,3 +54,10 @@ jobs:
           git add -A
           git commit -q -m "store $(date -u +'%Y-%m-%dT%H:%MZ')"
           git push --force "https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}.git" data
+
+      # Primary store for the web app; the data branch above stays as the backup it falls back to.
+      - name: Publish to the SIS PFAL SQL database
+        env:
+          PFAL_DB_USER: ${{ secrets.PFAL_DB_USER }}
+          PFAL_DB_PASS: ${{ secrets.PFAL_DB_PASS }}
+        run: python scripts/publish_db.py
