@@ -2,8 +2,8 @@
 
 # SIS PFAL Digital Twin
 
-**โครงการโรงประลอง (Rong Pralong) · วิทยาลัยบูรณาการศาสตร์ มหาวิทยาลัยเกษตรศาสตร์**
-*Rong Pralong project · School of Integrated Science, Kasetsart University*
+**โครงการโรงประลอง (Fab Lab) · วิทยาลัยบูรณาการศาสตร์ มหาวิทยาลัยเกษตรศาสตร์**
+*Fab Lab project · School of Integrated Science, Kasetsart University*
 
 🌐 **Web app:** https://sis-pfal-digital-twin.streamlit.app
 
