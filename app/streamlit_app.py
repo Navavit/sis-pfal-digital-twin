@@ -268,8 +268,18 @@ with st.sidebar.expander("about"):
     st.code(tw.summary(), language=None)
     st.markdown(f"{PROJECT['en']}  \nSIS PFAL = plant factory with artificial lighting at the School of Integrated Science.  \n"
                 "Source: ThingsBoard public dashboard *Vertical Smart Farming* (cat-smartgrow.com). Geometry from the LiDAR scan of 2026-09-13.")
+SPONSOR_URL = "https://www.civicagrotech.com/"
+_sponsor_b64 = __import__("base64").b64encode((ASSETS / "civic_agrotech_logo.png").read_bytes()).decode()
+
+
+def sponsor_logo(width: int) -> str:
+    """CIVIC Agrotech logo linking to their site (st.image cannot carry a link)."""
+    return (f'<a href="{SPONSOR_URL}" target="_blank" title="CIVIC Agrotech">'
+            f'<img src="data:image/png;base64,{_sponsor_b64}" width="{width}" alt="CIVIC Agrotech"></a>')
+
+
 st.sidebar.caption("ผู้สนับสนุน (Sponsor)")
-st.sidebar.image(str(ASSETS / "civic_agrotech_logo.png"), width=110, caption="CIVIC Agrotech")
+st.sidebar.markdown(sponsor_logo(60) + f'  \n<small><a href="{SPONSOR_URL}" target="_blank">CIVIC Agrotech</a></small>', unsafe_allow_html=True)
 
 # ============================================================================ OVERVIEW
 if page == "Overview":
@@ -571,7 +581,4 @@ elif page == "What-if":
 
 # ---------------------------------------------------------------------------- footer
 st.divider()
-_f1, _f2 = st.columns([5, 1], vertical_alignment="center")
-_f1.caption(f"**{PROJECT['name']}** — {PROJECT['th']}  \n{PROJECT['en']}  \n<small>build {APP_BUILD} · pfal_twin {pfal_twin.__version__}</small>", unsafe_allow_html=True)
-_f2.caption("Sponsored by")
-_f2.image(str(ASSETS / "civic_agrotech_logo.png"), width=90)
+st.caption(f"**{PROJECT['name']}** — {PROJECT['th']}  \n{PROJECT['en']}  \n<small>build {APP_BUILD} · pfal_twin {pfal_twin.__version__}</small>", unsafe_allow_html=True)
