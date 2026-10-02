@@ -1,5 +1,5 @@
 """SIS PFAL digital-twin web dashboard (Streamlit) — a thin UI over `pfal_twin.twin.DigitalTwin`.
-Rong Pralong (โรงประลอง) project · School of Integrated Science, Kasetsart University.
+โรงประลอง (Fab Lab) project · School of Integrated Science, Kasetsart University.
 
     streamlit run app/streamlit_app.py
 
@@ -39,7 +39,7 @@ from pfal_twin import thingsboard as tb, models as M, store  # noqa: E402
 
 ASSETS = Path(__file__).resolve().parent / "assets"
 PROJECT = dict(name="SIS PFAL Digital Twin", th="โรงประลอง · วิทยาลัยบูรณาการศาสตร์ มหาวิทยาลัยเกษตรศาสตร์",
-               en="Rong Pralong project · School of Integrated Science, Kasetsart University")
+               en="Fab Lab project · School of Integrated Science, Kasetsart University")
 st.set_page_config(page_title=PROJECT["name"], layout="wide", page_icon=str(ASSETS / "favicon.png"))
 st.logo(str(ASSETS / "sis_logo.png"), size="large", link="https://sis.ku.ac.th")
 FONT = "IBM Plex Sans Thai"   # loopless (ไม่มีหัว) Thai + Latin in one family
@@ -272,7 +272,7 @@ with st.sidebar.expander("about"):
 # ============================================================================ OVERVIEW
 if page == "Overview":
     PH = ASSETS / "photos"
-    st.title("ภาพรวม · SIS PFAL Digital Twin")
+    st.title("SIS PFAL Digital Twin")
     st.markdown(f"**{PROJECT['th']}**  \n{PROJECT['en']}")
     st.image(str(PH / "IMG_2413.jpg"), caption="SIS PFAL in production — five tiers of leafy greens under LED bars (growing stage on tiers 2–5, nursery on tier 1)", width="stretch")
     c1, c2, c3 = st.columns(3)
