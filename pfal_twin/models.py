@@ -216,6 +216,10 @@ CROPS = {
     "empty":       dict(color="#eeeeee", days=0,  fw_g=0,   dli=0,  price_thb_kg=0,   group="-"),
 }
 
+NURSERY_HOLES = {"nursery 2": (6, 21)}   # project team 2026-10-03: nursery 2 (tier 1) takes 6 x 21 = 126 seedlings;
+                                          # nursery 1 capacity not counted yet
+
+
 @dataclass
 class HoleLayout:
     tiers: tuple = (2, 3, 4, 5)
