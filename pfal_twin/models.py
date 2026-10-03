@@ -22,15 +22,17 @@ import pandas as pd
 class Params:
     # --- lighting
     led_bars_per_tier: int = 30           # project team 2026-10-03: 30 LED lamps on each of tiers 2-5
-    led_w_per_bar: float = 42.0           # design spec: 42 W per LED module (confirmed by the team); lamp = Civic Agrotech
-                                          # "LED Batten Plug And Grow 100 cm" 3-PF-N000266, white 4000 K + red 660 nm
-                                          # (IMG_2701; the label gives no wattage or PPF)
+    led_w_per_bar: float = 42.0           # lamp = Civic Agrotech "LED Batten Plug And Grow 100 cm" 3-PF-N000266, white 4000 K +
+                                          # red 660 nm (IMG_2701). Product page civicagrotech.com/product/plug-and-grow-100-cm-driver
+                                          # (checked 2026-10-03): "42W max", DC, dimmable 15-100 %, 3 tubes per 170 W driver,
+                                          # mount 30-45 cm above the crop; no PPF given. Same 42 W as the design spec.
     led_tiers: int = 4                    # growing tiers 2-5 (nursery tier 1 has its own lamps, treated separately)
     nursery_bars: int = 21                # nursery 2 (tier 1): 21 lamps of the same 42 W type (120 + 21 = 141 = design count)
     nursery1_lamps: int = 6               # nursery 1 (tier 1): 6 lamps of another type
-    nursery1_w_per_lamp: float = 18.0     # label (IMG_2700): "Plant Grow Light T8 ECO" 3-PF-N000140, 18 W, white 4000 K +
+    nursery1_w_per_lamp: float = 18.0     # label (IMG_2700): "Plant Grow Light T8 ECO" 3-PF-N000140 (shop: ECO SET 18 W, 120 cm), 18 W, white 4000 K +
                                           # red 660 nm, PAR+FR PPF 27 umol/s (= 1.5 umol/J), R/B 1.1:1, dimmable
-    led_efficacy_umol_per_j: float = 2.3  # white+red 660 nm bar, typical 2.0-2.6 umol/J — MEASURE WITH THE PPFD METER
+    led_efficacy_umol_per_j: float = 2.3  # white+red 660 nm bar, typical 2.0-2.6 umol/J — ASSUMED, no PPF published for the
+                                          # 100 cm batten (the vendor's T8 ECO label gives 1.5 umol/J) — MEASURE WITH THE PPFD METER
     canopy_fraction: float = 0.85         # share of photons landing on the tray (rest hits frame / aisle)
     photoperiod_h: float = 16.0           # from gc1.led duty (data) — default until confirmed
     dim_pct: float = 100.0                # currentStageBrightness (0-100)
