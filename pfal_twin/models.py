@@ -22,11 +22,14 @@ import pandas as pd
 class Params:
     # --- lighting
     led_bars_per_tier: int = 30           # project team 2026-10-03: 30 LED lamps on each of tiers 2-5
-    led_w_per_bar: float = 42.0           # design spec: 42 W per LED module (confirmed by the team for these lamps)
+    led_w_per_bar: float = 42.0           # design spec: 42 W per LED module (confirmed by the team); lamp = Civic Agrotech
+                                          # "LED Batten Plug And Grow 100 cm" 3-PF-N000266, white 4000 K + red 660 nm
+                                          # (IMG_2701; the label gives no wattage or PPF)
     led_tiers: int = 4                    # growing tiers 2-5 (nursery tier 1 has its own lamps, treated separately)
     nursery_bars: int = 21                # nursery 2 (tier 1): 21 lamps of the same 42 W type (120 + 21 = 141 = design count)
     nursery1_lamps: int = 6               # nursery 1 (tier 1): 6 lamps of another type
-    nursery1_w_per_lamp: float = 0.0      # wattage of the nursery-1 lamps — NOT KNOWN YET (0 = left out of the heat balance)
+    nursery1_w_per_lamp: float = 18.0     # label (IMG_2700): "Plant Grow Light T8 ECO" 3-PF-N000140, 18 W, white 4000 K +
+                                          # red 660 nm, PAR+FR PPF 27 umol/s (= 1.5 umol/J), R/B 1.1:1, dimmable
     led_efficacy_umol_per_j: float = 2.3  # white+red 660 nm bar, typical 2.0-2.6 umol/J — MEASURE WITH THE PPFD METER
     canopy_fraction: float = 0.85         # share of photons landing on the tray (rest hits frame / aisle)
     photoperiod_h: float = 16.0           # from gc1.led duty (data) — default until confirmed
@@ -52,8 +55,8 @@ class Params:
     thb_per_kwh: float = 4.5
 
     def to_frame(self):
-        src = {"led_bars_per_tier": "project team (count)", "led_w_per_bar": "design spec p.4", "led_tiers": "site", "nursery_bars": "project team (nursery 2)",
-               "nursery1_lamps": "project team (nursery 1, other type)", "nursery1_w_per_lamp": "PENDING - lamp spec",
+        src = {"led_bars_per_tier": "project team (count)", "led_w_per_bar": "design spec p.4 (confirmed by team)", "led_tiers": "site", "nursery_bars": "project team (nursery 2)",
+               "nursery1_lamps": "project team (nursery 1, other type)", "nursery1_w_per_lamp": "lamp label (IMG_2700)",
                "led_efficacy_umol_per_j": "ASSUMED - measure PPFD", "canopy_fraction": "ASSUMED", "photoperiod_h": "gc1.led duty (data)", "dim_pct": "gc1.currentStageBrightness",
                "wall_u": "material (design)", "roof_u": "material (design)", "floor_u": "ASSUMED", "window_u": "single glazing", "window_area_m2": "scan",
                "cafe_t": "ASSUMED", "infiltration_ach": "fitted from CO2 decay", "fans_w": "design spec", "pumps_w": "design spec + pwmWater duty",

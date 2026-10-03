@@ -25,8 +25,8 @@ sys.path.insert(0, str(ROOT))
 # is already loaded (version mismatch), drop it and re-import.
 import os  # noqa: E402
 os.environ["PYTHONPATH"] = str(ROOT) + os.pathsep + os.environ.get("PYTHONPATH", "")
-NEEDS_PKG = "2026.10.03.2"
-APP_BUILD = "2026-10-03 b"          # shown in the footer so everyone can tell which version is running
+NEEDS_PKG = "2026.10.03.3"
+APP_BUILD = "2026-10-03 c"          # shown in the footer so everyone can tell which version is running
 import pfal_twin  # noqa: E402
 if getattr(pfal_twin, "__version__", "") != NEEDS_PKG:
     for _m in [m for m in sys.modules if m == "pfal_twin" or m.startswith("pfal_twin.")]:
@@ -594,7 +594,7 @@ elif page == "What-if":
             st.dataframe(tw.whatif_light(photoperiods=tuple(pps), dims=tuple(dims)), width="stretch")
         with st.expander("model parameters (L3, uncalibrated)"):
             st.dataframe(tw.params.to_frame(), width="stretch")
-        st.caption("heat balance / energy use the steady-state model of notebook 06; calibrate with a PPFD map, the nursery-1 lamp wattage and the AC COP before quoting numbers")
+        st.caption("heat balance / energy use the steady-state model of notebook 06; calibrate with a PPFD map and the AC COP before quoting numbers")
 
 # ---------------------------------------------------------------------------- footer
 st.divider()
