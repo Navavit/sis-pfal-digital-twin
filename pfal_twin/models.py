@@ -191,7 +191,7 @@ def whatif_table(p: Params, model: dict, tray_area_m2: float, t_out_day, t_out_n
     return pd.DataFrame(rows)
 
 
-# --------------------------------------------------------------------------- crop mix what-if (tiers 2-5, 700 holes)
+# --------------------------------------------------------------------------- crop mix what-if (tiers 2-5, 720 holes)
 
 # Crop catalogue — agronomic defaults for NFT/DFT lettuce-type crops in a PFAL. ALL VALUES ASSUMED
 # (typical literature / grower numbers) — replace with the farm's own harvest records.
@@ -211,8 +211,8 @@ CROPS = {
 @dataclass
 class HoleLayout:
     tiers: tuple = (2, 3, 4, 5)
-    holes_total: int = 700              # site note 2026-09-14: 700 planting holes on tiers 2-5
-    rows: int = 7                       # holes across the tray width (1.04 m) — ASSUMED, count on site
+    holes_total: int = 720              # project team 2026-10-03: tiers 2-5, 6 x 30 holes each (180 per tier)
+    rows: int = 6                       # holes across the tray width (1.04 m); 30 columns along the rack
     def __post_init__(self):
         self.per_tier = self.holes_total // len(self.tiers)
         self.cols = int(round(self.per_tier / self.rows))

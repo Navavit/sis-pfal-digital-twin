@@ -6,7 +6,7 @@
 Pages:  Live  (latest ThingsBoard values in the 3-D twin, auto-refresh)
         History  (browse the local 10-min store, time-slider 3-D, KPI, events, heat-map)
         Layout & water  (as-built layout, water-system plan, process flow, flow animation)
-        What-if  (crop mix on the 700 holes, light/energy scenarios)
+        What-if  (crop mix on the 720 holes, light/energy scenarios)
 Notebooks 01-04 produce the files the twin loads; this app only reads them (+ live/incremental pulls from ThingsBoard).
 """
 from __future__ import annotations
@@ -25,8 +25,8 @@ sys.path.insert(0, str(ROOT))
 # is already loaded (version mismatch), drop it and re-import.
 import os  # noqa: E402
 os.environ["PYTHONPATH"] = str(ROOT) + os.pathsep + os.environ.get("PYTHONPATH", "")
-NEEDS_PKG = "2026.10.02.2"
-APP_BUILD = "2026-10-02 b"          # shown in the footer so everyone can tell which version is running
+NEEDS_PKG = "2026.10.03.1"
+APP_BUILD = "2026-10-03 a"          # shown in the footer so everyone can tell which version is running
 import pfal_twin  # noqa: E402
 if getattr(pfal_twin, "__version__", "") != NEEDS_PKG:
     for _m in [m for m in sys.modules if m == "pfal_twin" or m.startswith("pfal_twin.")]:
@@ -310,7 +310,7 @@ Digital twin = แบบจำลองห้องปลูกจริง (ร
     k1.markdown("**📡 Live**  \nกราฟแบบ dashboard (T/RH 5 จุด, CO₂, EC/pH + set-point, การจ่ายปุ๋ย) + twin 3-D ระบายสีตามค่าจริง รีเฟรชทุก 60 วิ  \n*Real-time charts and the 3-D twin coloured by live readings*")
     k2.markdown("**🕓 History**  \nเลื่อนเวลาดูห้อง ณ ช่วงใดก็ได้ตั้งแต่ ธ.ค. 2025, กราฟ, KPI, เหตุการณ์ผิดปกติ, ดาวน์โหลด CSV  \n*Time slider, KPIs, events and CSV export since Dec 2025*")
     k3.markdown("**🗺️ Layout & water**  \nผัง as-built จาก point cloud, ระบบท่อน้ำ/ปุ๋ย, process flow และแอนิเมชันการไหล  \n*As-built layout, pipework and flow animation*")
-    k4.markdown("**🌱 What-if**  \nเลือกสัดส่วนผักบน 700 หลุม (ชั้น 2–5) ดูผังรายหลุม 3-D + ผลผลิต/รายได้/แสงที่ต้องการ, สถานการณ์แสง–พลังงาน  \n*Crop-mix and light/energy scenarios*")
+    k4.markdown("**🌱 What-if**  \nเลือกสัดส่วนผักบน 720 หลุม (ชั้น 2–5) ดูผังรายหลุม 3-D + ผลผลิต/รายได้/แสงที่ต้องการ, สถานการณ์แสง–พลังงาน  \n*Crop-mix and light/energy scenarios*")
 
     st.markdown("#### ข้อมูลที่ใช้ · Data behind the twin")
     R_, K_ = tw.model["room"], tw.model["rack"]
@@ -318,7 +318,7 @@ Digital twin = แบบจำลองห้องปลูกจริง (ร
 | | |
 |---|---|
 | **ห้อง · room** | {R_['L']:.2f} × {R_['W']:.2f} × {R_['H']:.2f} m — from 2 LiDAR scans (13 Sep 2026) |
-| **ชั้นปลูก · rack** | {K_['length']:.2f} × {K_['width']:.2f} m, {len(K_['tiers'])} tiers · 700 planting holes on tiers 2–5 |
+| **ชั้นปลูก · rack** | {K_['length']:.2f} × {K_['width']:.2f} m, {len(K_['tiers'])} tiers · 720 planting holes on tiers 2–5 (6 × 30 per tier) |
 | **เซ็นเซอร์ / อุปกรณ์ · sensors / equipment** | {len(tw.sensors)} sensor units (5 × XY-MD02 T/RH, CO₂ controller, 2 grow controllers) · {len(tw.equipment)} mapped items |
 | **ข้อมูล IoT · records** | {len(tw.data):,} × 10-min bins, {d0:%d %b %Y} → {d1:%d %b %Y} (refreshed every 30 min) |
 | **แหล่งข้อมูล · source** | ThingsBoard dashboard *Vertical Smart Farming* — cat-smartgrow.com (Civic Agrotech) |
@@ -530,11 +530,11 @@ elif page == "Layout & water":
 # ============================================================================ WHAT-IF
 elif page == "What-if":
     st.title("จำลองสถานการณ์ (What-if)")
-    tab_crop, tab_light = st.tabs(["Crop mix on the 700 holes (tiers 2–5)", "Light / energy scenarios"])
+    tab_crop, tab_light = st.tabs(["Crop mix on the 720 holes (tiers 2–5)", "Light / energy scenarios"])
     with tab_crop:
         with st.expander("วิธีใช้ · How to use", expanded=True):
             st.markdown("""
-**ทำอะไร** — ทดลองว่าถ้าปลูกผักหลายชนิดผสมกันบน **700 หลุม** ของชั้น 2–5 (ชั้นละ 175 หลุม = 25 คอลัมน์ × 7 แถว) จะวางตรงไหน ได้ผลผลิต/รายได้เท่าไร และแสงพอหรือไม่
+**ทำอะไร** — ทดลองว่าถ้าปลูกผักหลายชนิดผสมกันบน **720 หลุม** ของชั้น 2–5 (ชั้นละ 180 หลุม = 30 คอลัมน์ × 6 แถว) จะวางตรงไหน ได้ผลผลิต/รายได้เท่าไร และแสงพอหรือไม่
 
 **ขั้นตอน**
 1. **crops** — เลือกชนิดผัก (เพิ่ม/ลบได้) จากรายการ 9 ชนิด

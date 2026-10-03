@@ -551,8 +551,8 @@ class DigitalTwin:
         return M.whatif_table(self.params, self.model, self.rack_area, d["t_out_day"], d["t_out_night"], d["t_ante_day"], d["t_ante_night"],
                               t_room=self.params.setpoint_t, photoperiods=photoperiods, dims=dims)
 
-    def crop_mix(self, mix: dict, policy="blocks", holes_total=700, rows=7, photoperiod_h=16.0, view="3d", path=None, name=None):
-        """Assign crops to the 700 holes of tiers 2-5 -> (assignment, summary, figure).
+    def crop_mix(self, mix: dict, policy="blocks", holes_total=720, rows=6, photoperiod_h=16.0, view="3d", path=None, name=None):
+        """Assign crops to the 720 holes of tiers 2-5 (6 x 30 per tier) -> (assignment, summary, figure).
         view="3d" (default): plotly 3-D rack with one marker per hole, shown in the notebook with the full-screen button
         view="2d": matplotlib hole-by-hole plan per tier (paper figure, saved to `path`); view=None: no figure."""
         hl = M.HoleLayout(holes_total=holes_total, rows=rows)
