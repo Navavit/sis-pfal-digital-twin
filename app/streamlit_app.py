@@ -25,8 +25,8 @@ sys.path.insert(0, str(ROOT))
 # is already loaded (version mismatch), drop it and re-import.
 import os  # noqa: E402
 os.environ["PYTHONPATH"] = str(ROOT) + os.pathsep + os.environ.get("PYTHONPATH", "")
-NEEDS_PKG = "2026.10.03.1"
-APP_BUILD = "2026-10-03 a"          # shown in the footer so everyone can tell which version is running
+NEEDS_PKG = "2026.10.03.2"
+APP_BUILD = "2026-10-03 b"          # shown in the footer so everyone can tell which version is running
 import pfal_twin  # noqa: E402
 if getattr(pfal_twin, "__version__", "") != NEEDS_PKG:
     for _m in [m for m in sys.modules if m == "pfal_twin" or m.startswith("pfal_twin.")]:
@@ -323,7 +323,7 @@ Digital twin = แบบจำลองห้องปลูกจริง (ร
 | **ข้อมูล IoT · records** | {len(tw.data):,} × 10-min bins, {d0:%d %b %Y} → {d1:%d %b %Y} (refreshed every 30 min) |
 | **แหล่งข้อมูล · source** | ThingsBoard dashboard *Vertical Smart Farming* — cat-smartgrow.com (Civic Agrotech) |
 """)
-    st.caption("Model parameters of the what-if layer are schematic until calibrated with PPFD, LED and harvest measurements. Photos: site survey 13 Sep 2026.")
+    st.caption("Model parameters of the what-if layer are schematic until calibrated with PPFD and harvest measurements (LED: 30 × 42 W lamps per growing tier). Photos: site survey 13 Sep 2026.")
 
 # ============================================================================ LIVE
 elif page == "Live":
@@ -545,7 +545,7 @@ elif page == "What-if":
 
 **อ่านตาราง** — `holes` จำนวนหลุม · `days_to_harvest` วันถึงเก็บเกี่ยว · `plant_fw_g` น้ำหนักสดต่อต้น · `kg_per_cycle` / `cycles_per_year` / `kg_per_year` ผลผลิต · `THB_per_year` รายได้ (ราคาในแคตตาล็อก) · `DLI_need` vs `DLI_available` แสงที่ต้องการ vs ที่โมเดลคำนวณได้ · `light_ok` = `yes` หรือขาดอีกกี่ mol/m²/d
 
-**ข้อจำกัด** — ตัวเลขผลผลิต/ราคา/DLI ที่ต้องการมาจากแคตตาล็อกเชิงสมมติ (`pfal_twin/models.py: CROPS`) และ DLI ที่มีคำนวณจากกำลัง LED โดยประมาณ **ยังไม่ได้สอบเทียบ**กับค่าวัดจริง (PPFD, จำนวนหลอด, น้ำหนักเก็บเกี่ยว) — ใช้เปรียบเทียบ *ระหว่างทางเลือก* ได้ แต่อย่านำตัวเลขสัมบูรณ์ไปอ้างอิง
+**ข้อจำกัด** — ตัวเลขผลผลิต/ราคา/DLI ที่ต้องการมาจากแคตตาล็อกเชิงสมมติ (`pfal_twin/models.py: CROPS`) และ DLI ที่มีคำนวณจากกำลัง LED (ชั้นละ 30 หลอด × 42 W) และประสิทธิภาพหลอดที่สมมติไว้ **ยังไม่ได้สอบเทียบ**กับค่าวัดจริง (PPFD, น้ำหนักเก็บเกี่ยว) — ใช้เปรียบเทียบ *ระหว่างทางเลือก* ได้ แต่อย่านำตัวเลขสัมบูรณ์ไปอ้างอิง
 """)
         crops = [k for k in M.CROPS if k != "empty"]
         c = st.columns([1, 3])
@@ -594,7 +594,7 @@ elif page == "What-if":
             st.dataframe(tw.whatif_light(photoperiods=tuple(pps), dims=tuple(dims)), width="stretch")
         with st.expander("model parameters (L3, uncalibrated)"):
             st.dataframe(tw.params.to_frame(), width="stretch")
-        st.caption("heat balance / energy use the steady-state model of notebook 06; calibrate with a PPFD map, LED count and the AC COP before quoting numbers")
+        st.caption("heat balance / energy use the steady-state model of notebook 06; calibrate with a PPFD map, the nursery-1 lamp wattage and the AC COP before quoting numbers")
 
 # ---------------------------------------------------------------------------- footer
 st.divider()

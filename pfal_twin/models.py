@@ -21,10 +21,12 @@ import pandas as pd
 @dataclass
 class Params:
     # --- lighting
-    led_bars_per_tier: int = 8            # counted from photos (IMG_2522/2533: ~8-9 bars) — COUNT ON SITE
-    led_w_per_bar: float = 42.0           # design spec: 42 W per LED module
-    led_tiers: int = 4                    # growing tiers 2-5 (nursery tier 1 has its own bars, treated separately)
-    nursery_bars: int = 8                 # tier 1 (nursery 1 + 2)
+    led_bars_per_tier: int = 30           # project team 2026-10-03: 30 LED lamps on each of tiers 2-5
+    led_w_per_bar: float = 42.0           # design spec: 42 W per LED module (confirmed by the team for these lamps)
+    led_tiers: int = 4                    # growing tiers 2-5 (nursery tier 1 has its own lamps, treated separately)
+    nursery_bars: int = 21                # nursery 2 (tier 1): 21 lamps of the same 42 W type (120 + 21 = 141 = design count)
+    nursery1_lamps: int = 6               # nursery 1 (tier 1): 6 lamps of another type
+    nursery1_w_per_lamp: float = 0.0      # wattage of the nursery-1 lamps — NOT KNOWN YET (0 = left out of the heat balance)
     led_efficacy_umol_per_j: float = 2.3  # white+red 660 nm bar, typical 2.0-2.6 umol/J — MEASURE WITH THE PPFD METER
     canopy_fraction: float = 0.85         # share of photons landing on the tray (rest hits frame / aisle)
     photoperiod_h: float = 16.0           # from gc1.led duty (data) — default until confirmed
@@ -50,7 +52,8 @@ class Params:
     thb_per_kwh: float = 4.5
 
     def to_frame(self):
-        src = {"led_bars_per_tier": "photos (count on site)", "led_w_per_bar": "design spec p.4", "led_tiers": "site", "nursery_bars": "photos",
+        src = {"led_bars_per_tier": "project team (count)", "led_w_per_bar": "design spec p.4", "led_tiers": "site", "nursery_bars": "project team (nursery 2)",
+               "nursery1_lamps": "project team (nursery 1, other type)", "nursery1_w_per_lamp": "PENDING - lamp spec",
                "led_efficacy_umol_per_j": "ASSUMED - measure PPFD", "canopy_fraction": "ASSUMED", "photoperiod_h": "gc1.led duty (data)", "dim_pct": "gc1.currentStageBrightness",
                "wall_u": "material (design)", "roof_u": "material (design)", "floor_u": "ASSUMED", "window_u": "single glazing", "window_area_m2": "scan",
                "cafe_t": "ASSUMED", "infiltration_ach": "fitted from CO2 decay", "fans_w": "design spec", "pumps_w": "design spec + pwmWater duty",
@@ -103,7 +106,7 @@ def heat_balance(p: Params, model: dict, t_out: float, t_ante: float, t_ground: 
     vol = L * W * H
     q["infiltration"] = 1.2 * 1005 * vol * p.infiltration_ach / 3600 * (t_out - p.setpoint_t)
     q["LED (growing tiers)"] = led_power_w(p) if led_on else 0.0
-    q["LED (nursery tier)"] = p.nursery_bars * p.led_w_per_bar * p.dim_pct / 100 if led_on else 0.0
+    q["LED (nursery tier)"] = (p.nursery_bars * p.led_w_per_bar + p.nursery1_lamps * p.nursery1_w_per_lamp) * p.dim_pct / 100 if led_on else 0.0
     q["fans"] = p.fans_w; q["pumps"] = p.pumps_w; q["dehumidifier"] = p.dehumidifier_w
     q["cooling required"] = sum(q.values())            # net heat gain that the AC must remove (W)
     q["AC electrical (at COP)"] = max(q["cooling required"], 0) / p.ac_cop
