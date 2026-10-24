@@ -25,8 +25,8 @@ sys.path.insert(0, str(ROOT))
 # is already loaded (version mismatch), drop it and re-import.
 import os  # noqa: E402
 os.environ["PYTHONPATH"] = str(ROOT) + os.pathsep + os.environ.get("PYTHONPATH", "")
-NEEDS_PKG = "2026.10.03.4"
-APP_BUILD = "2026-10-24 a"          # shown in the footer so everyone can tell which version is running
+NEEDS_PKG = "2026.10.24.1"
+APP_BUILD = "2026-10-24 b"          # shown in the footer so everyone can tell which version is running
 import pfal_twin  # noqa: E402
 if getattr(pfal_twin, "__version__", "") != NEEDS_PKG:
     for _m in [m for m in sys.modules if m == "pfal_twin" or m.startswith("pfal_twin.")]:
@@ -39,7 +39,11 @@ from pfal_twin import thingsboard as tb, models as M, store  # noqa: E402
 
 ASSETS = Path(__file__).resolve().parent / "assets"
 # Devices known to be out of service on purpose (edit when one goes away or comes back). Shown instead of "stale".
-DEVICE_STATUS = {"co2": dict(since="2026-10-13", th="ถอดไปซ่อม", en="removed for repair")}
+FLOOD = dict(th="น้ำท่วม PFAL", en="flood damage")
+DEVICE_STATUS = {"gc2": dict(since="2026-09-16", **FLOOD), "gc1": dict(since="2026-09-18", **FLOOD),
+                 "co2": dict(since="2026-09-21", th="น้ำท่วม PFAL · ถอดไปซ่อม (ทดสอบ 12–13 ต.ค. ไม่นับเป็นข้อมูลห้อง)",
+                             en="flood damage, removed for repair"),
+                 "gw": dict(since="2026-09-26", **FLOOD)}   # "since" = last valid data from that device
 PROJECT = dict(name="SIS PFAL Digital Twin", th="โรงประลอง · วิทยาลัยบูรณาการศาสตร์ มหาวิทยาลัยเกษตรศาสตร์",
                en="Fab Lab · School of Integrated Science, Kasetsart University")
 st.set_page_config(page_title=PROJECT["name"], layout="wide", page_icon=str(ASSETS / "favicon.png"))

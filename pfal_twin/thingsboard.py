@@ -261,11 +261,21 @@ QC_RANGES = {
 }
 # columns that are known to be meaningless in this installation
 QC_DROP = ["gc1.waterTemperature", "gc2.waterTemperature"]     # probe reads 42-54 °C -> not connected
+# (device, start, end, reason): samples that are not room conditions; kept in the raw long store, removed from the 10-min table
+QC_EXCLUDE = [("co2", "2026-10-12 00:00", "2026-10-14 00:00",
+               "CO2 meter bench-tested during repair after the Sep 2026 flood (≈400 ppm, 31 °C: not grow-room air)")]
 
 
-def clean_wide(w: pd.DataFrame, drop=QC_DROP, ranges=QC_RANGES) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Apply plausibility ranges and drop known-bad channels. Returns (clean, qc_report)."""
+def clean_wide(w: pd.DataFrame, drop=QC_DROP, ranges=QC_RANGES, exclude=QC_EXCLUDE) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Apply plausibility ranges, drop known-bad channels and excluded periods. Returns (clean, qc_report)."""
     w = w.drop(columns=[c for c in drop if c in w.columns])
+    for dev, a, b, _why in exclude:
+        cols = [c for c in w.columns if c.startswith(dev + ".")]
+        win = (w.index >= pd.Timestamp(a, tz=TZ)) & (w.index < pd.Timestamp(b, tz=TZ))
+        w.loc[win, cols] = np.nan
+    last = w.dropna(how="all").index.max()            # an excluded tail must not extend the table
+    if last == last:
+        w = w.loc[:last]
     rows = []
     for c in w.columns:
         key = c.split(".", 1)[1]
