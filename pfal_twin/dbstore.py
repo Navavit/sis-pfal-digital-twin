@@ -128,6 +128,9 @@ def publish(db: SqlApi, long: pd.DataFrame, wide: pd.DataFrame, manifest: dict, 
         last = None if full else max_ts(db, table)
         since = None if last is None else last - pd.Timedelta(overlap)
         out[name] = dict(since=str(since) if since is not None else "all", affected=push(db, df, since))
+    if len(wide):   # the 10-min table is rebuilt every run: bins past its end (e.g. later excluded by QC) are stale
+        end = _ts_sql(pd.DatetimeIndex([wide.index.max()]), ms=False)[0]
+        out["wide"]["deleted_after_end"] = db.execute(f"DELETE FROM {WIDE_T} WHERE ts > '{end}'")[0].get("affected_rows", 0)
     push_manifest(db, manifest)
     return out
 
