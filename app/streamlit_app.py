@@ -26,7 +26,7 @@ sys.path.insert(0, str(ROOT))
 import os  # noqa: E402
 os.environ["PYTHONPATH"] = str(ROOT) + os.pathsep + os.environ.get("PYTHONPATH", "")
 NEEDS_PKG = "2026.10.03.4"
-APP_BUILD = "2026-10-03 d"          # shown in the footer so everyone can tell which version is running
+APP_BUILD = "2026-10-24 a"          # shown in the footer so everyone can tell which version is running
 import pfal_twin  # noqa: E402
 if getattr(pfal_twin, "__version__", "") != NEEDS_PKG:
     for _m in [m for m in sys.modules if m == "pfal_twin" or m.startswith("pfal_twin.")]:
@@ -38,6 +38,8 @@ from pfal_twin.twin import DigitalTwin  # noqa: E402
 from pfal_twin import thingsboard as tb, models as M, store  # noqa: E402
 
 ASSETS = Path(__file__).resolve().parent / "assets"
+# Devices known to be out of service on purpose (edit when one goes away or comes back). Shown instead of "stale".
+DEVICE_STATUS = {"co2": dict(since="2026-10-13", th="ถอดไปซ่อม", en="removed for repair")}
 PROJECT = dict(name="SIS PFAL Digital Twin", th="โรงประลอง · วิทยาลัยบูรณาการศาสตร์ มหาวิทยาลัยเกษตรศาสตร์",
                en="Fab Lab · School of Integrated Science, Kasetsart University")
 st.set_page_config(page_title=PROJECT["name"], layout="wide", page_icon=str(ASSETS / "favicon.png"))
@@ -213,6 +215,12 @@ def age_text(td: pd.Timedelta) -> str:
     return f"{s} s" if s < 90 else f"{s // 60} min" if s < 5400 else f"{s / 3600:.1f} h" if s < 172800 else f"{s / 86400:.1f} d"
 
 
+def device_note(dev: str) -> str:
+    """'🔧 removed for repair since 13 Oct 2026' for devices in DEVICE_STATUS, else ''."""
+    d = DEVICE_STATUS.get(dev)
+    return f"🔧 {d['en']} ({d['th']}) since {pd.Timestamp(d['since']):%d %b %Y}" if d else ""
+
+
 def state_cards(state, ages: dict | None = None, row=None):
     """Metric cards — limited to what the public ThingsBoard dashboard shows (T/RH per unit, CO₂, VPD, VOC, EC/pH + setpoints)."""
     g = lambda k: (float(row.get(k, float("nan"))) if row is not None else float("nan"))
@@ -247,7 +255,7 @@ def state_cards(state, ages: dict | None = None, row=None):
         c[5].metric("Controller uptime gc1 / gc2", f"{fmt(up1, 1)} / {fmt(up2, 1)} h",
                     f"CO₂ valve {'ON' if g('co2.Relay_co2') >= 0.5 else 'off' if g('co2.Relay_co2') == g('co2.Relay_co2') else '—'} · amb T {fmt(g('gc1.ambTemperature'), 1)} °C", delta_color="off")
     if ages:
-        st.caption("last message per device: " + " · ".join(f"**{d}** {age_text(a)} ago" for d, a in ages.items()))
+        st.caption("last message per device: " + " · ".join(f"**{d}** {device_note(d) or age_text(a) + ' ago'}" for d, a in ages.items()))
 
 
 # ---------------------------------------------------------------------------- sidebar
@@ -312,6 +320,18 @@ Digital twin = แบบจำลองห้องปลูกจริง (ร
     k3.markdown("**🗺️ Layout & water**  \nผัง as-built จาก point cloud, ระบบท่อน้ำ/ปุ๋ย, process flow และแอนิเมชันการไหล  \n*As-built layout, pipework and flow animation*")
     k4.markdown("**🌱 What-if**  \nเลือกสัดส่วนผักบน 720 หลุม (ชั้น 2–5) ดูผังรายหลุม 3-D + ผลผลิต/รายได้/แสงที่ต้องการ, สถานการณ์แสง–พลังงาน  \n*Crop-mix and light/energy scenarios*")
 
+    def device_status_text() -> str:
+        """Last data per device from the store; devices in DEVICE_STATUS carry their note."""
+        out = []
+        measured = {"gw": [c for c in tw.data.columns if c.startswith("gw.xy_md_")], "gc1": ["gc1.ec", "gc1.ph"],
+                    "gc2": ["gc2.ec", "gc2.ph"], "co2": ["co2.CO2", "co2.temperature"]}   # not the forward-filled set-points
+        for dev in ("gw", "gc1", "gc2", "co2"):
+            cols = [c for c in measured[dev] if c in tw.data.columns]
+            last = tw.data[cols].dropna(how="all").index.max() if cols else None
+            txt = f"last data {last:%d %b %Y}" if last is not None and last == last else "no data"
+            out.append(f"**{dev}** {device_note(dev) or txt}")
+        return " · ".join(out)
+
     st.markdown("#### ข้อมูลที่ใช้ · Data behind the twin")
     R_, K_ = tw.model["room"], tw.model["rack"]
     st.markdown(f"""
@@ -321,6 +341,7 @@ Digital twin = แบบจำลองห้องปลูกจริง (ร
 | **ชั้นปลูก · rack** | {K_['length']:.2f} × {K_['width']:.2f} m, {len(K_['tiers'])} tiers · 720 planting holes on tiers 2–5 (6 × 30 per tier) · nursery 2 (tier 1): 126 holes (6 × 21) |
 | **เซ็นเซอร์ / อุปกรณ์ · sensors / equipment** | {len(tw.sensors)} sensor units (5 × XY-MD02 T/RH, CO₂ controller, 2 grow controllers) · {len(tw.equipment)} mapped items |
 | **ข้อมูล IoT · records** | {len(tw.data):,} × 10-min bins, {d0:%d %b %Y} → {d1:%d %b %Y} (refreshed every 30 min) |
+| **สถานะอุปกรณ์ · device status** | {device_status_text()} |
 | **แหล่งข้อมูล · source** | ThingsBoard dashboard *Vertical Smart Farming* — cat-smartgrow.com (Civic Agrotech) |
 """)
     st.caption("Model parameters of the what-if layer are schematic until calibrated with PPFD and harvest measurements (LED: 30 × 42 W lamps per growing tier). Photos: site survey 13 Sep 2026.")
@@ -344,8 +365,8 @@ elif page == "Live":
             state, table = tw.state(d1), None
         ages = table.groupby("device")["age"].min().to_dict() if table is not None else None
         row = table["value"] if table is not None else tw.data.loc[state.time]
-        stale = [f"{d} {age_text(a)}" for d, a in (ages or {}).items() if a > pd.Timedelta("30min")]
-        st.caption(f"**{state.time:%Y-%m-%d %H:%M:%S}** Asia/Bangkok · " + " · ".join(f"{d} {age_text(a)} ago" for d, a in (ages or {}).items())
+        stale = [f"{d} {age_text(a)}" for d, a in (ages or {}).items() if a > pd.Timedelta("30min") and d not in DEVICE_STATUS]
+        st.caption(f"**{state.time:%Y-%m-%d %H:%M:%S}** Asia/Bangkok · " + " · ".join(f"{d} {device_note(d) or age_text(a) + ' ago'}" for d, a in (ages or {}).items())
                    + (f" · ⚠ stale: {', '.join(stale)}" if stale else ""))
 
         # ---- charts first (same window and 5-min averaging as the ThingsBoard dashboard)
