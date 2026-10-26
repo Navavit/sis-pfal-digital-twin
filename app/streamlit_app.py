@@ -26,7 +26,7 @@ sys.path.insert(0, str(ROOT))
 import os  # noqa: E402
 os.environ["PYTHONPATH"] = str(ROOT) + os.pathsep + os.environ.get("PYTHONPATH", "")
 NEEDS_PKG = "2026.10.24.1"
-APP_BUILD = "2026-10-24 b"          # shown in the footer so everyone can tell which version is running
+APP_BUILD = "2026-10-26 a"          # shown in the footer so everyone can tell which version is running
 import pfal_twin  # noqa: E402
 if getattr(pfal_twin, "__version__", "") != NEEDS_PKG:
     for _m in [m for m in sys.modules if m == "pfal_twin" or m.startswith("pfal_twin.")]:
@@ -41,9 +41,10 @@ ASSETS = Path(__file__).resolve().parent / "assets"
 # Devices known to be out of service on purpose (edit when one goes away or comes back). Shown instead of "stale".
 FLOOD = dict(th="น้ำท่วม PFAL", en="flood damage")
 DEVICE_STATUS = {"gc2": dict(since="2026-09-16", **FLOOD), "gc1": dict(since="2026-09-18", **FLOOD),
-                 "co2": dict(since="2026-09-21", th="น้ำท่วม PFAL · ถอดไปซ่อม (ทดสอบ 12–13 ต.ค. ไม่นับเป็นข้อมูลห้อง)",
-                             en="flood damage, removed for repair"),
-                 "gw": dict(since="2026-09-26", **FLOOD)}   # "since" = last valid data from that device
+                 "co2": dict(since="2026-10-26", th="ติดตั้งกลับหลังซ่อมแล้ว รอเปิดระบบ (เสียจากน้ำท่วม 21 ก.ย.)",
+                             en="reinstalled after flood repair, system not running yet"),
+                 "gw": dict(since="2026-09-26", **FLOOD)}
+# "since" = last valid data (flood) or the date of the note; a device that reports after that day clears its own note
 PROJECT = dict(name="SIS PFAL Digital Twin", th="โรงประลอง · วิทยาลัยบูรณาการศาสตร์ มหาวิทยาลัยเกษตรศาสตร์",
                en="Fab Lab · School of Integrated Science, Kasetsart University")
 st.set_page_config(page_title=PROJECT["name"], layout="wide", page_icon=str(ASSETS / "favicon.png"))
@@ -219,10 +220,16 @@ def age_text(td: pd.Timedelta) -> str:
     return f"{s} s" if s < 90 else f"{s // 60} min" if s < 5400 else f"{s / 3600:.1f} h" if s < 172800 else f"{s / 86400:.1f} d"
 
 
-def device_note(dev: str) -> str:
-    """'🔧 removed for repair since 13 Oct 2026' for devices in DEVICE_STATUS, else ''."""
+def device_note(dev: str, last=None) -> str:
+    """'🔧 <note> since <date>' for devices in DEVICE_STATUS, else ''. `last` = the device's latest data; data newer than
+    the day after `since` means the device is back, so the note no longer applies."""
     d = DEVICE_STATUS.get(dev)
-    return f"🔧 {d['en']} ({d['th']}) since {pd.Timestamp(d['since']):%d %b %Y}" if d else ""
+    if not d:
+        return ""
+    since = pd.Timestamp(d["since"], tz=TZ)
+    if last is not None and last == last and pd.Timestamp(last) > since + pd.Timedelta("1D"):
+        return ""
+    return f"🔧 {d['en']} ({d['th']}) since {since:%d %b %Y}"
 
 
 def state_cards(state, ages: dict | None = None, row=None):
@@ -259,7 +266,8 @@ def state_cards(state, ages: dict | None = None, row=None):
         c[5].metric("Controller uptime gc1 / gc2", f"{fmt(up1, 1)} / {fmt(up2, 1)} h",
                     f"CO₂ valve {'ON' if g('co2.Relay_co2') >= 0.5 else 'off' if g('co2.Relay_co2') == g('co2.Relay_co2') else '—'} · amb T {fmt(g('gc1.ambTemperature'), 1)} °C", delta_color="off")
     if ages:
-        st.caption("last message per device: " + " · ".join(f"**{d}** {device_note(d) or age_text(a) + ' ago'}" for d, a in ages.items()))
+        now = pd.Timestamp.now(tz=TZ)
+        st.caption("last message per device: " + " · ".join(f"**{d}** {device_note(d, now - a) or age_text(a) + ' ago'}" for d, a in ages.items()))
 
 
 # ---------------------------------------------------------------------------- sidebar
@@ -333,7 +341,7 @@ Digital twin = แบบจำลองห้องปลูกจริง (ร
             cols = [c for c in measured[dev] if c in tw.data.columns]
             last = tw.data[cols].dropna(how="all").index.max() if cols else None
             txt = f"last data {last:%d %b %Y}" if last is not None and last == last else "no data"
-            out.append(f"**{dev}** {device_note(dev) or txt}")
+            out.append(f"**{dev}** {device_note(dev, last) or txt}")
         return " · ".join(out)
 
     st.markdown("#### ข้อมูลที่ใช้ · Data behind the twin")
@@ -369,8 +377,9 @@ elif page == "Live":
             state, table = tw.state(d1), None
         ages = table.groupby("device")["age"].min().to_dict() if table is not None else None
         row = table["value"] if table is not None else tw.data.loc[state.time]
-        stale = [f"{d} {age_text(a)}" for d, a in (ages or {}).items() if a > pd.Timedelta("30min") and d not in DEVICE_STATUS]
-        st.caption(f"**{state.time:%Y-%m-%d %H:%M:%S}** Asia/Bangkok · " + " · ".join(f"{d} {device_note(d) or age_text(a) + ' ago'}" for d, a in (ages or {}).items())
+        now = pd.Timestamp.now(tz=TZ)
+        stale = [f"{d} {age_text(a)}" for d, a in (ages or {}).items() if a > pd.Timedelta("30min") and not device_note(d, now - a)]
+        st.caption(f"**{state.time:%Y-%m-%d %H:%M:%S}** Asia/Bangkok · " + " · ".join(f"{d} {device_note(d, now - a) or age_text(a) + ' ago'}" for d, a in (ages or {}).items())
                    + (f" · ⚠ stale: {', '.join(stale)}" if stale else ""))
 
         # ---- charts first (same window and 5-min averaging as the ThingsBoard dashboard)
