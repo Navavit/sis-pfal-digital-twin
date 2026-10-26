@@ -26,7 +26,7 @@ sys.path.insert(0, str(ROOT))
 import os  # noqa: E402
 os.environ["PYTHONPATH"] = str(ROOT) + os.pathsep + os.environ.get("PYTHONPATH", "")
 NEEDS_PKG = "2026.10.24.1"
-APP_BUILD = "2026-10-26 a"          # shown in the footer so everyone can tell which version is running
+APP_BUILD = "2026-10-26 b"          # shown in the footer so everyone can tell which version is running
 import pfal_twin  # noqa: E402
 if getattr(pfal_twin, "__version__", "") != NEEDS_PKG:
     for _m in [m for m in sys.modules if m == "pfal_twin" or m.startswith("pfal_twin.")]:
@@ -41,8 +41,8 @@ ASSETS = Path(__file__).resolve().parent / "assets"
 # Devices known to be out of service on purpose (edit when one goes away or comes back). Shown instead of "stale".
 FLOOD = dict(th="น้ำท่วม PFAL", en="flood damage")
 DEVICE_STATUS = {"gc2": dict(since="2026-09-16", **FLOOD), "gc1": dict(since="2026-09-18", **FLOOD),
-                 "co2": dict(since="2026-10-26", th="ติดตั้งกลับหลังซ่อมแล้ว รอเปิดระบบ (เสียจากน้ำท่วม 21 ก.ย.)",
-                             en="reinstalled after flood repair, system not running yet"),
+                 "co2": dict(since="2026-10-26", th="ติดตั้งกลับหลังซ่อมแล้ว แต่ยังไม่ส่งข้อมูล (ระบบอื่นกลับมา 26 ต.ค.)",
+                             en="reinstalled after flood repair, not reporting yet"),
                  "gw": dict(since="2026-09-26", **FLOOD)}
 # "since" = last valid data (flood) or the date of the note; a device that reports after that day clears its own note
 PROJECT = dict(name="SIS PFAL Digital Twin", th="โรงประลอง · วิทยาลัยบูรณาการศาสตร์ มหาวิทยาลัยเกษตรศาสตร์",
