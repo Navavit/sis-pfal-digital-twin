@@ -1,4 +1,4 @@
-<p align="center"><img src="app/assets/sis_logo.png" width="120" alt="School of Integrated Science, Kasetsart University"></p>
+<p align="center"><img src="app/assets/logo_ku.png" height="56" alt="มหาวิทยาลัยเกษตรศาสตร์ (Kasetsart University)"> &nbsp; <img src="app/assets/logo_sis.png" height="56" alt="วิทยาลัยบูรณาการศาสตร์ (School of Integrated Science)"></p>
 
 # SIS PFAL Digital Twin
 

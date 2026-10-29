@@ -26,7 +26,7 @@ sys.path.insert(0, str(ROOT))
 import os  # noqa: E402
 os.environ["PYTHONPATH"] = str(ROOT) + os.pathsep + os.environ.get("PYTHONPATH", "")
 NEEDS_PKG = "2026.10.24.1"
-APP_BUILD = "2026-10-26 b"          # shown in the footer so everyone can tell which version is running
+APP_BUILD = "2026-10-29 a"          # shown in the footer so everyone can tell which version is running
 import pfal_twin  # noqa: E402
 if getattr(pfal_twin, "__version__", "") != NEEDS_PKG:
     for _m in [m for m in sys.modules if m == "pfal_twin" or m.startswith("pfal_twin.")]:
@@ -48,7 +48,6 @@ DEVICE_STATUS = {"gc2": dict(since="2026-09-16", **FLOOD), "gc1": dict(since="20
 PROJECT = dict(name="SIS PFAL Digital Twin", th="โรงประลอง · วิทยาลัยบูรณาการศาสตร์ มหาวิทยาลัยเกษตรศาสตร์",
                en="Fab Lab · School of Integrated Science, Kasetsart University")
 st.set_page_config(page_title=PROJECT["name"], layout="wide", page_icon=str(ASSETS / "favicon.png"))
-st.logo(str(ASSETS / "sis_logo.png"), size="large", link="https://sis.ku.ac.th")
 FONT = "IBM Plex Sans Thai"   # loopless (ไม่มีหัว) Thai + Latin in one family
 st.markdown(f"""<style>
 @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&display=swap');
@@ -57,7 +56,32 @@ code, pre, .stCode *, [data-testid="stCode"] * {{ font-family: 'IBM Plex Mono', 
 /* Streamlit's icons are ligatures of an icon font -- keep that font, otherwise they render as text ("keyboard_arrow_right") */
 .stApp [data-testid="stIconMaterial"], .stApp [data-testid="stExpanderToggleIcon"], .stApp [class*="material-symbols"],
 .stApp span[translate="no"] {{ font-family: 'Material Symbols Rounded' !important; }}
+/* family header (same pattern as BURANA and SISoil): product mark + name, KU then SIS logos on the right */
+.pfal-top {{ display: flex; flex-wrap: wrap; gap: 12px; justify-content: space-between; align-items: center;
+             padding: 4px 0 14px; margin-bottom: 6px; border-bottom: 1px solid #e3dfd4; }}
+.pfal-top .brand {{ display: flex; align-items: center; gap: 14px; min-width: 0; }}
+.pfal-top .brand-mark {{ flex: none; border-radius: 11px; display: block; }}
+.pfal-top .name {{ font-size: 1.5rem; font-weight: 700; line-height: 1.25; color: #22201c; }}
+.pfal-top .brand-th {{ font-weight: 500; font-size: .8em; color: #6b665c; margin-left: 4px; }}
+.pfal-top .sub {{ margin: 2px 0 0; color: #6b665c; font-size: 14px; }}
+.pfal-top .logos {{ display: inline-flex; align-items: center; gap: 12px; background: #ffffff; padding: 6px 10px;
+                    border-radius: 10px; border: 1px solid #e3dfd4; }}
+.pfal-top .logos img {{ height: 48px; width: auto; display: block; }}
 </style>""", unsafe_allow_html=True)
+
+
+def _data_uri(path: Path, mime: str) -> str:
+    return f"data:{mime};base64," + __import__("base64").b64encode(path.read_bytes()).decode()
+
+
+st.markdown(f"""<div class="pfal-top">
+  <div class="brand"><img class="brand-mark" src="{_data_uri(ASSETS / 'pfal.svg', 'image/svg+xml')}" alt="" width="48" height="48">
+    <div><div class="name">SIS PFAL <span class="brand-th">ห้องปลูกพืชระบบปิด</span></div>
+      <p class="sub">Digital twin ของห้องปลูกพืชด้วยแสงเทียม · โรงประลอง (Fab Lab) วิทยาลัยบูรณาการศาสตร์</p></div></div>
+  <a class="logos" href="https://sis.ku.ac.th/" target="_blank" rel="noopener" title="วิทยาลัยบูรณาการศาสตร์ มหาวิทยาลัยเกษตรศาสตร์">
+    <img src="{_data_uri(ASSETS / 'logo_ku.png', 'image/png')}" alt="มหาวิทยาลัยเกษตรศาสตร์ (Kasetsart University)">
+    <img src="{_data_uri(ASSETS / 'logo_sis.png', 'image/png')}" alt="วิทยาลัยบูรณาการศาสตร์ (School of Integrated Science)"></a>
+</div>""", unsafe_allow_html=True)
 import plotly.io as pio
 pio.templates["sis"] = pio.templates["plotly_white"]; pio.templates["sis"].layout.font.family = f"{FONT}, sans-serif"; pio.templates.default = "sis"
 TZ = tb.TZ
