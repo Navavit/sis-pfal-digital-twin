@@ -26,7 +26,7 @@ sys.path.insert(0, str(ROOT))
 import os  # noqa: E402
 os.environ["PYTHONPATH"] = str(ROOT) + os.pathsep + os.environ.get("PYTHONPATH", "")
 NEEDS_PKG = "2026.10.24.1"
-APP_BUILD = "2026-10-29 b"          # shown in the footer so everyone can tell which version is running
+APP_BUILD = "2026-10-29 c"          # shown in the footer so everyone can tell which version is running
 import pfal_twin  # noqa: E402
 if getattr(pfal_twin, "__version__", "") != NEEDS_PKG:
     for _m in [m for m in sys.modules if m == "pfal_twin" or m.startswith("pfal_twin.")]:
@@ -95,7 +95,7 @@ if st_cache_clear:
     st.cache_resource.clear(); st.cache_data.clear()
 
 
-@st.cache_data(ttl=600, show_spinner=False)
+@st.cache_data(ttl=600, show_spinner=False, max_entries=2)
 def store_version(_nonce: int = 0) -> str:
     """Every 10 min: if the SQL database (or, as a fallback, the `data` branch on GitHub) has a newer store than the
     local file, top the local copy up.
@@ -109,7 +109,7 @@ def store_version(_nonce: int = 0) -> str:
     return lm.get("updated_at", "local")
 
 
-@st.cache_resource(show_spinner="loading digital twin ...")
+@st.cache_resource(show_spinner="loading digital twin ...", max_entries=1)   # keep only the current twin (~75 MB)
 def get_twin(version: str = "", pkg: str = "", cls_id: int = 0) -> DigitalTwin:
     """Cached per store version, package version AND class identity: after a redeploy / hot reload Streamlit gives us a
     new DigitalTwin class, and an instance built from the old class must not survive in the cache."""
@@ -120,7 +120,7 @@ HISTORY_START = "2026-06-13"       # continuous operation from 13 June 2026; ear
 STORE_VERSION = store_version()
 
 
-@st.cache_data(ttl=600, show_spinner=False)
+@st.cache_data(ttl=600, show_spinner=False, max_entries=2)
 def top_up(version: str, _nonce: int = 0):
     """Every 10 min: append what ThingsBoard has since the stored table ended (in memory), so History is never behind
     even when the 30-min GitHub Actions job is delayed."""
@@ -133,7 +133,7 @@ def top_up(version: str, _nonce: int = 0):
 TOP_UP = top_up(STORE_VERSION, int(time.time() // 600))
 
 
-@st.cache_resource(ttl=60, show_spinner=False)
+@st.cache_resource(ttl=60, show_spinner=False, max_entries=2)
 def live_snapshot(_nonce: int):
     """Latest values from ThingsBoard (cached 60 s so many viewers do not hammer the server).
     cache_resource (no pickling): a TwinState built by a hot-reloaded module cannot be pickled by cache_data."""
@@ -141,7 +141,7 @@ def live_snapshot(_nonce: int):
     return st_, table
 
 
-@st.cache_data(ttl=60, show_spinner=False)
+@st.cache_data(ttl=60, show_spinner=False, max_entries=10)
 def recent_window(hours: int, _nonce: int):
     """Last `hours` hours straight from ThingsBoard (5-min averages, raw pump events) — same window as the dashboard."""
     return get_twin(STORE_VERSION, NEEDS_PKG, id(DigitalTwin)).recent(hours=hours, interval_min=5 if hours <= 24 else 15)
@@ -197,7 +197,7 @@ def stat_line(d, nd=2):
     d = d.dropna(); return f"now {d.iloc[-1]:.{nd}f} · min {d.min():.{nd}f} · avg {d.mean():.{nd}f} · max {d.max():.{nd}f}" if d.size else "no data"
 
 
-@st.cache_data(show_spinner=False)
+@st.cache_data(show_spinner=False, max_entries=2)
 def availability_figure(version: str):
     """Per-device data coverage per day (share of 10-min bins with at least one value) -> shows the gaps at a glance."""
     import plotly.graph_objects as go
@@ -212,7 +212,7 @@ def availability_figure(version: str):
     return fig
 
 
-@st.cache_data(show_spinner=False)
+@st.cache_data(show_spinner=False, max_entries=4)
 def full_store_bytes(version: str, fmt: str) -> bytes:
     """Whole 10-min table (from the first sample, not only the shown period) as CSV or Parquet (cached per store version)."""
     import io as _io
@@ -231,8 +231,25 @@ def raw_store_bytes(version: str) -> bytes:
     b = _io.BytesIO(); dbstore.pull_long(SqlApi.from_secrets()).to_parquet(b); return b.getvalue()
 
 
-@st.cache_resource(show_spinner="rendering layout ...")
-def static_figure(kind: str):
+@st.cache_resource(show_spinner="rendering point cloud ...", max_entries=4)
+def cloud_figure(n: int, open_up: bool, version: str):
+    return get_twin(version, NEEDS_PKG, id(DigitalTwin)).cloud_figure(n=n, height=680, open_up=open_up)
+
+
+@st.cache_resource(show_spinner="rendering flow animation ...", max_entries=1)
+def flow_animation(version: str):
+    return get_twin(version, NEEDS_PKG, id(DigitalTwin)).flow_animation()
+
+
+@st.cache_data(show_spinner="rendering layout ...", max_entries=8)
+def static_png(kind: str, version: str) -> bytes:
+    """The matplotlib drawings as PNG, rendered once (st.pyplot would redraw them on every rerun)."""
+    import io as _io
+    b = _io.BytesIO(); static_figure(kind, version).savefig(b, format="png", dpi=150, bbox_inches="tight"); return b.getvalue()
+
+
+@st.cache_resource(show_spinner="rendering layout ...", max_entries=5)
+def static_figure(kind: str, version: str = ""):   # keyed by store version: the heat-map changes with the data
     tw = get_twin(STORE_VERSION, NEEDS_PKG, id(DigitalTwin))
     return {"layout": tw.layout_figure, "water": tw.water_plan, "flow": tw.flow_diagram, "corner": tw.corner_detail, "heatmap": tw.heatmap}[kind]()
 
@@ -319,7 +336,7 @@ st.sidebar.markdown(f"**History store**  \n{d0:%Y-%m-%d} → {d1:%Y-%m-%d %H:%M}
                     f"<small>updated {pd.Timestamp(_lm['updated_at']).tz_convert(TZ):%d %b %H:%M} · {_ss.get('action', '')}</small>" if _lm.get("updated_at") else
                     f"**History store**  \n{d0:%Y-%m-%d} → {d1:%Y-%m-%d %H:%M}  \n{len(tw.data):,} × 10-min bins", unsafe_allow_html=True)
 if st.sidebar.button("↻ check for new data", help="GitHub Actions refreshes the store every 30 min and the app tops it up from ThingsBoard every 10 min — this checks now"):
-    store_version.clear(); top_up.clear(); static_figure.clear(); st.rerun()
+    store_version.clear(); top_up.clear(); static_figure.clear(); static_png.clear(); st.rerun()
 with st.sidebar.expander("about"):
     st.code(tw.summary(), language=None)
     st.markdown(f"{PROJECT['en']}  \nSIS PFAL = plant factory with artificial lighting at the School of Integrated Science.  \n"
@@ -554,7 +571,7 @@ elif page == "History":
         st.dataframe(ev, width="stretch", height=350)
         st.caption(f"thresholds: {tw.limits}")
     with t3:
-        st.pyplot(static_figure("heatmap"), width="stretch")
+        st.image(static_png("heatmap", STORE_VERSION), width="stretch")
     st.download_button("download selected range (CSV)", hist.to_csv().encode(), file_name=f"pfal_{start}_{end}.csv", mime="text/csv")
 
 # ============================================================================ LAYOUT
@@ -566,22 +583,22 @@ elif page == "Layout & water":
                     "this is scan 2 (true colour), aligned to the room frame and thinned to a 4-cm grid. The green slabs and frame are the parametric model "
                     "the twin uses (room 7.12 × 3.01 × 2.58 m, rack 5.43 × 1.04 m, 5 tiers) — the two scans agree within 5–8 cm.")
         cc = st.columns([2, 1])
-        npts = cc[0].select_slider("points shown", options=[50000, 100000, 150000, 200000], value=100000, help="fewer points = smoother rotation on a laptop")
+        npts = cc[0].select_slider("points shown", options=[50000, 100000, 150000, 200000], value=50000, help="fewer points = faster loading and smoother rotation")
         open_up = cc[1].toggle("hide ceiling and front wall", value=True, help="off = the complete scan, as recorded")
-        fig_pc, meta_pc = tw.cloud_figure(n=npts, height=680, open_up=open_up)
+        fig_pc, meta_pc = cloud_figure(npts, open_up, STORE_VERSION)
         st.plotly_chart(fig_pc, **PLOTLY, key=f"cloud_{npts}_{open_up}")
         st.caption(meta_pc + " · raw scans (119 MB) are kept out of the repository; notebooks 01–02 process them.")
     with t1:
-        st.pyplot(static_figure("layout"), width="stretch")
+        st.image(static_png("layout", STORE_VERSION), width="stretch")
     with t2:
-        st.pyplot(static_figure("water"), width="stretch")
+        st.image(static_png("water", STORE_VERSION), width="stretch")
     with t3:
-        st.pyplot(static_figure("flow"), width="stretch")
+        st.image(static_png("flow", STORE_VERSION), width="stretch")
     with t4:
-        st.plotly_chart(tw.flow_animation(), **PLOTLY)
+        st.plotly_chart(flow_animation(STORE_VERSION), **PLOTLY)
         st.caption("schematic — direction from photos and the design drawing; there is no flow sensor")
     with t5:
-        st.pyplot(static_figure("corner"), width="stretch")
+        st.image(static_png("corner", STORE_VERSION), width="stretch")
     with st.expander("equipment table"):
         st.dataframe(tw.equipment, width="stretch")
     with st.expander("sensor table"):
