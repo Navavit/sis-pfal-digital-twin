@@ -26,7 +26,7 @@ sys.path.insert(0, str(ROOT))
 import os  # noqa: E402
 os.environ["PYTHONPATH"] = str(ROOT) + os.pathsep + os.environ.get("PYTHONPATH", "")
 NEEDS_PKG = "2026.10.24.1"
-APP_BUILD = "2026-10-29 a"          # shown in the footer so everyone can tell which version is running
+APP_BUILD = "2026-10-29 b"          # shown in the footer so everyone can tell which version is running
 import pfal_twin  # noqa: E402
 if getattr(pfal_twin, "__version__", "") != NEEDS_PKG:
     for _m in [m for m in sys.modules if m == "pfal_twin" or m.startswith("pfal_twin.")]:
@@ -47,7 +47,9 @@ DEVICE_STATUS = {"gc2": dict(since="2026-09-16", **FLOOD), "gc1": dict(since="20
 # "since" = last valid data (flood) or the date of the note; a device that reports after that day clears its own note
 PROJECT = dict(name="SIS PFAL Digital Twin", th="โรงประลอง · วิทยาลัยบูรณาการศาสตร์ มหาวิทยาลัยเกษตรศาสตร์",
                en="Fab Lab · School of Integrated Science, Kasetsart University")
-st.set_page_config(page_title=PROJECT["name"], layout="wide", page_icon=str(ASSETS / "favicon.png"))
+# tab title in the same pattern as BURANA and SISoil: "NAME ชื่อไทย · คำอธิบาย"
+st.set_page_config(page_title="SIS PFAL ห้องปลูกพืชระบบปิด · ดิจิทัลทวินของห้องปลูกพืชด้วยแสงเทียม", layout="wide",
+                   page_icon=str(ASSETS / "favicon.png"))
 FONT = "IBM Plex Sans Thai"   # loopless (ไม่มีหัว) Thai + Latin in one family
 st.markdown(f"""<style>
 @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&display=swap');
