@@ -9,6 +9,10 @@ Tables (times are Asia/Bangkok local time):
 
 GitHub Actions writes (publish(), incremental: the last `overlap` of data is re-sent, INSERT IGNORE / REPLACE);
 the web app reads (pull_wide(), incremental from its local copy).
+
+Requests: the API runs several `;`-separated statements in one request, so a publish is 1 login + 2 queries (read the
+database state, then all writes; more only if the writes exceed MAX_SQL_BYTES), and a web-app check is 1 query
+(+1 per 5000 rows when the store changed).
 """
 from __future__ import annotations
 
@@ -43,8 +47,7 @@ DDL = [
 
 
 def create_tables(db: SqlApi):
-    for sql in DDL:
-        db.execute(sql)
+    db.execute(";\n".join(DDL))
 
 
 # --------------------------------------------------------------------------- helpers
@@ -68,71 +71,96 @@ def _num(v) -> str:
     return "NULL" if v is None or (isinstance(v, float) and not np.isfinite(v)) else repr(float(v))
 
 
-def _send_chunked(db: SqlApi, head: str, rows: list[str], tail: str = "") -> int:
-    """INSERT head + rows, split so each request stays under MAX_SQL_BYTES. Returns affected rows."""
-    n, buf, size = 0, [], len(head)
-    for r in rows + [None]:
-        if r is None or (buf and size + len(r) + 1 > MAX_SQL_BYTES):
-            if buf:
-                n += db.execute(head + ",".join(buf) + tail)[0].get("affected_rows", 0)
-            buf, size = [], len(head)
-        if r is not None:
-            buf.append(r); size += len(r) + 1
+def _chunks(head: str, rows: list[str]) -> list[str]:
+    """INSERT head + rows as statements of at most MAX_SQL_BYTES each."""
+    out, buf, size = [], [], len(head)
+    for r in rows:
+        if buf and size + len(r) + 1 > MAX_SQL_BYTES:
+            out.append(head + ",".join(buf)); buf, size = [], len(head)
+        buf.append(r); size += len(r) + 1
+    if buf:
+        out.append(head + ",".join(buf))
+    return out
+
+
+def _run_packed(db: SqlApi, stmts: list[tuple[str, str]]) -> dict[str, int]:
+    """Run (tag, sql) statements in order in as few requests as possible (each under MAX_SQL_BYTES).
+    Returns affected rows per tag."""
+    n, batch, size = {}, [], 0
+    for item in stmts + [None]:
+        if item is None or (batch and size + len(item[1]) + 2 > MAX_SQL_BYTES):
+            if batch:
+                for (tag, _), res in zip(batch, db.execute(";\n".join(sql for _, sql in batch))):
+                    n[tag] = n.get(tag, 0) + (res.get("affected_rows", 0) if isinstance(res, dict) else 0)
+            batch, size = [], 0
+        if item is not None:
+            batch.append(item); size += len(item[1]) + 2
     return n
 
 
-def max_ts(db: SqlApi, table: str) -> pd.Timestamp | None:
-    v = db.select(f"SELECT MAX(ts) AS t FROM {table}")[0]["t"]
+def _max_ts(rows: list[dict]) -> pd.Timestamp | None:
+    v = rows[0]["t"] if rows else None
     return pd.Timestamp(v).tz_localize(TZ) if v else None
 
 
+def _fields(rows: list[dict]) -> list[str]:
+    return [r["Field"] for r in rows if r["Field"] != "ts"]
+
+
+def max_ts(db: SqlApi, table: str) -> pd.Timestamp | None:
+    return _max_ts(db.select(f"SELECT MAX(ts) AS t FROM {table}"))
+
+
 def wide_columns(db: SqlApi) -> list[str]:
-    return [r["Field"] for r in db.select(f"SHOW COLUMNS FROM {WIDE_T}") if r["Field"] != "ts"]
+    return _fields(db.select(f"SHOW COLUMNS FROM {WIDE_T}"))
 
 
 # --------------------------------------------------------------------------- write (GitHub Actions)
 
-def push_long(db: SqlApi, long: pd.DataFrame, since=None) -> int:
+def long_statements(long: pd.DataFrame, since=None) -> list[str]:
     if since is not None:
         long = long[long["ts"] >= since]
     rows = [f"('{t}','{d}','{k}',{_num(v)})" for t, d, k, v in
             zip(_ts_sql(long["ts"], ms=True), long["device"], long["key"], long["value"].to_numpy())]
-    return _send_chunked(db, f"INSERT IGNORE INTO {LONG_T} (ts, device, metric, value) VALUES ", rows)
+    return _chunks(f"INSERT IGNORE INTO {LONG_T} (ts, device, metric, value) VALUES ", rows)
 
 
-def push_wide(db: SqlApi, wide: pd.DataFrame, since=None) -> int:
-    """REPLACE the bins from `since` on (recent bins change as late samples arrive); adds columns for new variables."""
+def wide_statements(wide: pd.DataFrame, have: list[str], since=None) -> list[str]:
+    """REPLACE the bins from `since` on (recent bins change as late samples arrive), after an ALTER that adds columns
+    for variables the table (`have` = its columns) does not have yet."""
     if since is not None:
         wide = wide.loc[wide.index >= since]
-    have = set(wide_columns(db))
-    new = [c for c in wide.columns if db_col(c) not in have]
-    if new:
-        db.execute(f"ALTER TABLE {WIDE_T} " + ", ".join(f"ADD COLUMN `{db_col(c)}` DOUBLE NULL" for c in new))
+    new = [c for c in wide.columns if db_col(c) not in set(have)]
+    alter = [f"ALTER TABLE {WIDE_T} " + ", ".join(f"ADD COLUMN `{db_col(c)}` DOUBLE NULL" for c in new)] if new else []
     cols = ", ".join(["ts"] + [f"`{db_col(c)}`" for c in wide.columns])
     vals = wide.to_numpy(dtype=float)
     rows = [f"('{t}'," + ",".join(_num(v) for v in row) + ")" for t, row in zip(_ts_sql(wide.index, ms=False), vals)]
-    return _send_chunked(db, f"REPLACE INTO {WIDE_T} ({cols}) VALUES ", rows)
+    return alter + _chunks(f"REPLACE INTO {WIDE_T} ({cols}) VALUES ", rows)
 
 
-def push_manifest(db: SqlApi, manifest: dict):
+def manifest_statement(manifest: dict) -> str:
     js = json.dumps(manifest).replace("\\", "\\\\").replace("'", "''")
-    db.execute(f"REPLACE INTO {META_T} (name, value) VALUES ('manifest', '{js}')")
+    return f"REPLACE INTO {META_T} (name, value) VALUES ('manifest', '{js}')"
 
 
 def publish(db: SqlApi, long: pd.DataFrame, wide: pd.DataFrame, manifest: dict, overlap: str = "3D", full: bool = False) -> dict:
     """Send what is new since the database's last timestamp (minus `overlap`), then the manifest (last, so readers
-    only see a new version once its data is in)."""
-    create_tables(db)
-    out = {}
-    for name, table, push, df in [("long", LONG_T, push_long, long), ("wide", WIDE_T, push_wide, wide)]:
-        last = None if full else max_ts(db, table)
-        since = None if last is None else last - pd.Timedelta(overlap)
-        out[name] = dict(since=str(since) if since is not None else "all", affected=push(db, df, since))
+    only see a new version once its data is in).
+    Two queries: 1) create the tables if needed + read their last timestamps and the 10-min columns, 2) all writes."""
+    state = db.execute(";\n".join(DDL + [f"SELECT MAX(ts) AS t FROM {LONG_T}", f"SELECT MAX(ts) AS t FROM {WIDE_T}",
+                                          f"SHOW COLUMNS FROM {WIDE_T}"]))
+    last_long, last_wide, have = _max_ts(state[-3]), _max_ts(state[-2]), _fields(state[-1])
+    since = {k: None if full or v is None else v - pd.Timedelta(overlap) for k, v in (("long", last_long), ("wide", last_wide))}
+    stmts = [("long", s) for s in long_statements(long, since["long"])]
+    stmts += [("wide", s) for s in wide_statements(wide, have, since["wide"])]
     if len(wide):   # the 10-min table is rebuilt every run: bins past its end (e.g. later excluded by QC) are stale
         end = _ts_sql(pd.DatetimeIndex([wide.index.max()]), ms=False)[0]
-        out["wide"]["deleted_after_end"] = db.execute(f"DELETE FROM {WIDE_T} WHERE ts > '{end}'")[0].get("affected_rows", 0)
-    push_manifest(db, manifest)
-    return out
+        stmts.append(("deleted", f"DELETE FROM {WIDE_T} WHERE ts > '{end}'"))
+    stmts.append(("manifest", manifest_statement(manifest)))
+    n = _run_packed(db, stmts)
+    fmt = lambda s: str(s) if s is not None else "all"
+    return dict(long=dict(since=fmt(since["long"]), affected=n.get("long", 0)),
+                wide=dict(since=fmt(since["wide"]), affected=n.get("wide", 0), deleted_after_end=n.get("deleted", 0)))
 
 
 # --------------------------------------------------------------------------- read (web app)
@@ -143,13 +171,12 @@ def remote_manifest(db: SqlApi) -> dict | None:
 
 
 def pull_wide(db: SqlApi, since=None, page_rows: int = 5000) -> pd.DataFrame:
-    """10-min table from `since` on (all if None), paged by time so each response stays small."""
-    cols = wide_columns(db)
-    sel = ", ".join(["ts"] + [f"`{c}`" for c in cols])
+    """10-min table from `since` on (all if None), paged by time so each response stays small (SELECT *: no extra
+    request for the column list)."""
     lo = "1970-01-01 00:00:00" if since is None else _ts_sql(pd.DatetimeIndex([since]), ms=False)[0]
     frames, op = [], ">="
     while True:
-        rows = db.select(f"SELECT {sel} FROM {WIDE_T} WHERE ts {op} '{lo}' ORDER BY ts LIMIT {page_rows}")
+        rows = db.select(f"SELECT * FROM {WIDE_T} WHERE ts {op} '{lo}' ORDER BY ts LIMIT {page_rows}")
         if not rows:
             break
         frames.append(pd.DataFrame(rows))
@@ -157,7 +184,7 @@ def pull_wide(db: SqlApi, since=None, page_rows: int = 5000) -> pd.DataFrame:
         if len(rows) < page_rows:
             break
     if not frames:
-        return pd.DataFrame(columns=[app_col(c) for c in cols], index=pd.DatetimeIndex([], tz=TZ, name="ts"), dtype=float)
+        return pd.DataFrame(columns=[app_col(c) for c in wide_columns(db)], index=pd.DatetimeIndex([], tz=TZ, name="ts"), dtype=float)
     df = pd.concat(frames, ignore_index=True)
     df.index = pd.DatetimeIndex(pd.to_datetime(df.pop("ts"))).tz_localize(TZ)
     df.index.name = None
