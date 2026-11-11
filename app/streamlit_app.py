@@ -25,8 +25,8 @@ sys.path.insert(0, str(ROOT))
 # is already loaded (version mismatch), drop it and re-import.
 import os  # noqa: E402
 os.environ["PYTHONPATH"] = str(ROOT) + os.pathsep + os.environ.get("PYTHONPATH", "")
-NEEDS_PKG = "2026.11.03.1"
-APP_BUILD = "2026-11-03 a"          # shown in the footer so everyone can tell which version is running
+NEEDS_PKG = "2026.11.11.1"
+APP_BUILD = "2026-11-11 a"          # shown in the footer so everyone can tell which version is running
 import pfal_twin  # noqa: E402
 if getattr(pfal_twin, "__version__", "") != NEEDS_PKG:
     for _m in [m for m in sys.modules if m == "pfal_twin" or m.startswith("pfal_twin.")]:
@@ -35,7 +35,7 @@ if getattr(pfal_twin, "__version__", "") != NEEDS_PKG:
 else:
     st_cache_clear = False
 from pfal_twin.twin import DigitalTwin  # noqa: E402
-from pfal_twin import thingsboard as tb, models as M, store  # noqa: E402
+from pfal_twin import thingsboard as tb, models as M, store, planting  # noqa: E402
 
 ASSETS = Path(__file__).resolve().parent / "assets"
 # Devices known to be out of service on purpose (edit when one goes away or comes back). Shown instead of "stale".
@@ -254,6 +254,69 @@ def static_figure(kind: str, version: str = ""):   # keyed by store version: the
     return {"layout": tw.layout_figure, "water": tw.water_plan, "flow": tw.flow_diagram, "corner": tw.corner_detail, "heatmap": tw.heatmap}[kind]()
 
 
+@st.cache_data(ttl=600, show_spinner=False, max_entries=2)
+def planting_rounds(_nonce: int) -> pd.DataFrame:
+    """Planting rounds of tiers 2-5 from the public sheet (re-read every 10 min)."""
+    return planting.load()
+
+
+CROP_COLOURS = ["#cfe3c4", "#f3d9b1", "#c9dcef", "#ead1e4", "#f1e7a8", "#cde9e3", "#e4d6c3", "#d8d3ef", "#f2cfc4", "#dfe7c0"]
+
+
+def tray_map_html(grid: pd.DataFrame) -> str:
+    """Tiers 5 (top) to 2 as rows, trays 1 (door) to 10 as columns; one colour per crop, red = two blocks on one tray."""
+    crops = sorted({c for c in grid.loc[grid.n == 1, "crop"]})
+    colour = {c: CROP_COLOURS[i % len(CROP_COLOURS)] for i, c in enumerate(crops)}
+    cell = "padding:6px 4px;border:1px solid #e3dfd4;text-align:center;font-size:12px;line-height:1.3;min-width:76px"
+    head = "".join(f"<th style='{cell};background:#f7f6f2;font-weight:600'>{t}</th>" for t in range(1, planting.TRAYS + 1))
+    body = ""
+    for tier in sorted(planting.TIERS, reverse=True):
+        tds = ""
+        for _, r in grid[grid.tier == tier].iterrows():
+            if r.n == 0:
+                tds += f"<td style='{cell};background:#ffffff;color:#a19c90'>ว่าง</td>"
+                continue
+            left = "" if r.days_left is None else ("ถึงกำหนดเก็บ" if r.days_left <= 0 else f"อีก {r.days_left:.0f} วัน")
+            if r.n > 1:
+                tds += f"<td style='{cell};background:#f4cccc;border:2px solid #c0392b' title='{r['round']}'><b>⚠ ข้อมูลชนกัน</b><br>{r.crop}</td>"
+            else:
+                tds += f"<td style='{cell};background:{colour[r.crop]}' title='{r['round']}'><b>{r.crop}</b><br><span style='color:#6b665c'>{left}</span></td>"
+        body += f"<tr><th style='{cell};background:#f7f6f2;font-weight:600'>ชั้น {tier}</th>{tds}</tr>"
+    return (f"<div style='overflow-x:auto'><table style='border-collapse:collapse;width:100%'>"
+            f"<tr><th style='{cell};background:#f7f6f2'>ชั้น \\ ถาด</th>{head}</tr>{body}</table>"
+            "<div style='display:flex;justify-content:space-between;font-size:12px;color:#6b665c;padding:2px 2px 0 80px'>"
+            "<span>← ฝั่งประตู · door</span><span>ฝั่งด้านใน · far side →</span></div></div>")
+
+
+def planting_section():
+    st.markdown("#### ผังชั้นปลูกวันนี้ · what is growing (tiers 2–5)")
+    try:
+        rounds = planting_rounds(int(time.time() // 600))
+    except Exception as e:
+        st.info(f"ยังอ่านข้อมูลรอบปลูกไม่ได้ · planting sheet unavailable ({str(e)[:120]})")
+        return
+    grid = planting.tray_map(rounds)
+    used = int((grid.n > 0).sum()); clash = int((grid.n > 1).sum()); total = len(grid)
+    m = st.columns(4)
+    m[0].metric("ถาดที่ใช้ · trays in use", f"{used} / {total}")
+    m[1].metric("หลุมที่ใช้ · holes in use", f"{used * planting.HOLES_PER_TRAY} / {total * planting.HOLES_PER_TRAY}")
+    m[2].metric("ชนิดพืช · crops", len({c for cs in grid.crop if cs for c in cs.split(" / ")}))
+    m[3].metric("ถาดที่ข้อมูลชนกัน · conflicts", clash)
+    st.markdown(tray_map_html(grid), unsafe_allow_html=True)
+    if clash:
+        st.warning(f"{clash} ถาดมีพืชมากกว่าหนึ่งรายการในข้อมูลรอบปลูก ให้แก้ชั้น/ถาดในแท็บ รอบปลูก (ดูคอลัมน์ ตรวจสอบ) · "
+                   f"{clash} trays are claimed by more than one block in the planting log")
+    up = planting.upcoming_harvests(rounds)
+    if len(up):
+        st.markdown("**กำหนดเก็บเกี่ยวใน 3 สัปดาห์ · harvests in the next 3 weeks**")
+        show = pd.DataFrame({"วันเก็บ (คาด)": up["harvest_plan"].dt.strftime("%d %b %Y"), "อีก (วัน)": up["days_left"],
+                             "พืช": up["crop"], "ชั้น": up["tier"], "ถาด": up["tray_from"].astype(str) + "–" + up["tray_to"].astype(str),
+                             "หลุม": up["holes"], "รอบ": up["round"]})
+        st.dataframe(show, hide_index=True, width="stretch")
+    st.caption(f"จากบันทึกรอบปลูกของทีม ([PFAL รอบปลูก]({planting.SHEET_URL})) อัปเดตทุก 10 นาที · ชั้น 1 (เพาะกล้า) ไม่แสดง · "
+               "1 ถาด = 18 หลุม (6 × 3), ชั้นละ 10 ถาด · วันเก็บเป็นค่าคาดตามชนิดพืช")
+
+
 def fmt(v, nd=1, unit=""):
     return "—" if v is None or v != v else f"{v:.{nd}f}{unit}"
 
@@ -469,6 +532,7 @@ elif page == "Live":
                 st.dataframe(t2[["meaning", "value", "ts", "age", "on dashboard"]], width="stretch", height=480)
 
     live_view()
+    planting_section()   # outside the 60-s fragment: the sheet is re-read every 10 min
 
 # ============================================================================ HISTORY
 elif page == "History":
