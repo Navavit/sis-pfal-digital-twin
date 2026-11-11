@@ -26,7 +26,7 @@ sys.path.insert(0, str(ROOT))
 import os  # noqa: E402
 os.environ["PYTHONPATH"] = str(ROOT) + os.pathsep + os.environ.get("PYTHONPATH", "")
 NEEDS_PKG = "2026.11.11.4"
-APP_BUILD = "2026-11-11 k"          # shown in the footer so everyone can tell which version is running
+APP_BUILD = "2026-11-11 m"          # shown in the footer so everyone can tell which version is running
 import pfal_twin  # noqa: E402
 if getattr(pfal_twin, "__version__", "") != NEEDS_PKG:
     for _m in [m for m in sys.modules if m == "pfal_twin" or m.startswith("pfal_twin.")]:
@@ -395,7 +395,7 @@ def state_cards(state, ages: dict | None = None, row=None):
 # ---------------------------------------------------------------------------- sidebar
 tw = get_twin(STORE_VERSION, NEEDS_PKG, id(DigitalTwin))
 st.sidebar.markdown(f"**{PROJECT['name']}**  \n<small>{PROJECT['th']}</small>", unsafe_allow_html=True)
-PAGES = {"Overview": "ภาพรวม (Overview)", "Dashboard": "จอแสดงผล (Dashboard · TV)", "Live": "ข้อมูลสด (Live)", "History": "ข้อมูลย้อนหลัง (History)",
+PAGES = {"Overview": "ภาพรวม (Overview)", "Live": "ข้อมูลสด (Live)", "History": "ข้อมูลย้อนหลัง (History)",
          "Layout & water": "ผังห้องและระบบน้ำ (Layout & water)", "What-if": "จำลองสถานการณ์ (What-if)"}
 # closed to the public for now (code kept): remove a name to show it again
 HIDDEN_PAGES = {"Layout & water"}
@@ -405,7 +405,7 @@ _label = st.sidebar.radio("Page", list(PAGES.values()), label_visibility="collap
 page = {v: k for k, v in PAGES.items()}[_label]
 if ON_DASHBOARD:                                     # …/dashboard (the TV bookmarks this)
     page = "Dashboard"
-elif page == "Dashboard" or st.query_params.get("page") == "dashboard":   # menu choice, or an old ?page=dashboard link
+elif st.query_params.get("page") == "dashboard":    # an old ?page=dashboard link (the way in now: a button on Live)
     st.switch_page(_DASH)
 VAR_LABEL = {"T": "air temperature (°C)", "RH": "relative humidity (%)", "VPD": "VPD (kPa)"}
 
@@ -492,11 +492,12 @@ Digital twin = แบบจำลองห้องปลูกจริง (ร
 
 # ============================================================================ LIVE
 elif page == "Dashboard":
-    # one 1920 x 1080 screen, no scrolling: header (name + logos) | 3-D twin with plants + tray map | big numbers + 24-h charts
+    # TV screen, 1920 x 1080, no scrolling. Header: name + live clock + logos. Centre: 3-D twin with plants over the tray
+    # map. Left: the air in the room. Right: nutrient solution and light. Each side ends with a 24-h trend.
     st.markdown("""<style>
     section[data-testid="stSidebar"], [data-testid="stSidebarCollapsedControl"], header[data-testid="stHeader"],
-    [data-testid="stToolbar"], footer {display: none !important;}
-    .block-container {padding: 0.5rem 1.2rem 0 1.2rem !important; max-width: 100% !important;}
+    [data-testid="stToolbar"], footer, .pfal-top {display: none !important;}
+    .block-container {padding: 0.2rem 1.4rem 0 1.4rem !important; max-width: 100% !important;}
     /* screens >= 1000 px: lay the page out at 1920 px from the start (charts are drawn at that width); the script in
        tv_controls() then only scales it (CSS transform) to fit the screen */
     @media (min-width: 1000px) {
@@ -504,18 +505,39 @@ elif page == "Dashboard":
                         align-self: flex-start !important; transform-origin: top left;}
       [data-testid="stMain"] {overflow: hidden !important;}
     }
-    .stApp [data-testid="stVerticalBlock"] {gap: 0.35rem;}
-    .pfal-top {padding: 0 0 6px !important; margin-bottom: 2px !important;}
-    .tv-grid {display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; padding-bottom: 12px;}
-    .tv-tile {background: #ffffff; border: 1px solid #e3dfd4; border-radius: 10px; padding: 8px 12px; min-height: 92px;}
-    .tv-tile .l {font-size: 13px; color: #6b665c; line-height: 1.2;}
-    .tv-tile .v {font-size: 34px; font-weight: 700; color: #22201c; line-height: 1.15; white-space: nowrap;}
-    .tv-tile .v small {font-size: 15px; font-weight: 500; color: #6b665c; margin-left: 3px;}
-    .tv-tile .s {font-size: 12.5px; color: #6b665c;}
-    .tv-tile.off .v {color: #a19c90; font-size: 22px;}
-    .tv-status {font-size: 13px; color: #6b665c; display: flex; justify-content: space-between;}
-    .tv-status a {color: #6b665c;}
+    .stApp [data-testid="stVerticalBlock"] {gap: 0.45rem;}
+    .tv-head {display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; padding: 2px 0 10px;
+              border-bottom: 1px solid #e3dfd4; margin-bottom: 6px;}
+    .tv-head .brand {display: flex; align-items: center; gap: 14px;}
+    .tv-head .brand img {border-radius: 12px;}
+    .tv-head .name {font-size: 30px; font-weight: 700; color: #22201c; line-height: 1.1;}
+    .tv-head .name span {font-size: 20px; font-weight: 500; color: #6b665c; margin-left: 8px;}
+    .tv-head .sub {font-size: 14px; color: #6b665c;}
+    .tv-head .clock {text-align: center;}
+    .tv-head .clock .t {font-size: 38px; font-weight: 700; color: #22201c; line-height: 1;}
+    .tv-head .clock .d {font-size: 14px; color: #6b665c;}
+    .tv-head .live {display: inline-block; font-size: 13px; font-weight: 600; color: #1f6b67; background: #e4f1ee;
+                    border-radius: 999px; padding: 2px 10px; margin-bottom: 4px;}
+    .tv-head .live.stale {color: #9a6a12; background: #f8ecd2;}
+    .tv-head .logos {justify-self: end; display: flex; gap: 14px; align-items: center; background: #fff; padding: 8px 14px;
+                     border-radius: 12px; border: 1px solid #e3dfd4;}
+    .tv-head .logos img {height: 56px;}
+    .tv-group {font-size: 15px; font-weight: 700; letter-spacing: .02em; padding: 0 2px 2px; display: flex; gap: 8px; align-items: center;}
+    .tv-group i {display: inline-block; width: 10px; height: 10px; border-radius: 3px;}
+    .tv-tile {background: #fff; border: 1px solid #e3dfd4; border-left: 6px solid var(--acc); border-radius: 12px;
+              padding: 7px 16px 7px 14px; margin-bottom: 7px; position: relative;}
+    .tv-tile .l {font-size: 15px; color: #6b665c;}
+    .tv-tile .v {font-size: 46px; font-weight: 700; color: #22201c; line-height: 1.08; white-space: nowrap;}
+    .tv-tile .v small {font-size: 20px; font-weight: 500; color: #6b665c; margin-left: 5px;}
+        .tv-tile .s {font-size: 14px; color: #6b665c;}
+    .tv-tile .dot {position: absolute; top: 12px; right: 14px; font-size: 13px; font-weight: 600; padding: 1px 9px; border-radius: 999px;}
+    .tv-tile .dot.ok {color: #2e7d4f; background: #e3f2e8;}
+    .tv-tile .dot.warn {color: #9a6a12; background: #f8ecd2;}
+    .tv-tile.off .v {color: #a19c90; font-size: 26px;}
+    .tv-foot {font-size: 13px; color: #8a857a;}
     </style>""", unsafe_allow_html=True)
+    AIR, WATER, LIGHT = "#1f6b67", "#2f6fa3", "#c98a1b"     # group accents: air, nutrient solution, light & plants
+    LIM = tw.limits
 
     def tv_controls():
         """Full-screen button + fit-to-screen: the page is laid out for 1920 x 1080 and scaled (CSS transform) to any
@@ -556,9 +578,14 @@ btn.onclick = async () => {
 };
 </script>""", height=34)
 
-    def tile(label, value, unit="", sub="", off=False):
-        return (f"<div class='tv-tile{' off' if off else ''}'><div class='l'>{label}</div>"
-                f"<div class='v'>{value}<small>{unit}</small></div><div class='s'>{sub}</div></div>")
+    def tile(label, value, unit="", sub="", acc=AIR, ok=None, off=False):
+        """One reading: label, big value, unit, small line; ok=True/False adds a 'ปกติ' / 'ควรตรวจ' badge."""
+        badge = "" if ok is None or off else (f"<span class='dot ok'>ปกติ</span>" if ok else f"<span class='dot warn'>ควรตรวจ</span>")
+        return (f"<div class='tv-tile{' off' if off else ''}' style='--acc:{acc}'>{badge}<div class='l'>{label}</div>"
+                f"<div class='v'>{value if not off else 'ไม่มีสัญญาณ'}<small>{'' if off else unit}</small></div><div class='s'>{sub}</div></div>")
+
+    def group(title, acc):
+        return f"<div class='tv-group' style='color:{acc}'><i style='background:{acc}'></i>{title}</div>"
 
     def dash_state():
         try:
@@ -567,17 +594,114 @@ btn.onclick = async () => {
         except Exception:   # ThingsBoard down -> last stored bin
             return tw.state(d1), tw.data.loc[tw.state(d1).time], {}
 
-    left, right = st.columns([1.5, 1], gap="medium")
+    def trend(lines: dict, title: str, unit: str, height: int, ref: float | None = None):
+        """Compact 24-h trend for the TV: a few thick lines, legend on top, optional dashed reference (set-point)."""
+        import plotly.graph_objects as go
+        fig = go.Figure()
+        for (name, ser), col in zip(lines.items(), ("#1f6b67", "#c98a1b", "#2f6fa3")):
+            ser = ser.dropna()
+            if len(ser):
+                fig.add_scatter(x=ser.index, y=ser.values, mode="lines", name=name, line=dict(color=col, width=2.6))
+        if ref == ref and ref is not None:
+            fig.add_hline(y=ref, line=dict(color="#c0392b", width=2, dash="dash"), annotation_text=f"set {ref:.2f}",
+                          annotation_position="top left", annotation_font=dict(color="#c0392b", size=12))
+        fig.update_layout(title=dict(text=title, x=0, font=dict(size=15)), height=height, margin=dict(l=40, r=10, t=56, b=28),
+                          legend=dict(orientation="h", y=1.02, yanchor="bottom", x=0, font=dict(size=12)), yaxis_title=unit,
+                          paper_bgcolor="#ffffff", plot_bgcolor="#ffffff", xaxis=dict(tickformat="%H:%M", nticks=7))
+        return fig
+
+    @st.fragment(run_every="60s")
+    def dash_header():
+        state, _, ages = dash_state()
+        now = pd.Timestamp.now(tz=TZ)
+        fresh = bool(ages) and min(ages.values()) < pd.Timedelta("15min")
+        st.markdown(f"""<div class="tv-head">
+  <div class="brand"><img src="{_data_uri(ASSETS / 'pfal.svg', 'image/svg+xml')}" width="62" height="62" alt="">
+    <div><div class="name">SIS PFAL<span>ห้องปลูกพืชระบบปิดด้วยแสงเทียม</span></div>
+      <div class="sub">Digital twin · โรงประลอง (Fab Lab) วิทยาลัยบูรณาการศาสตร์ มหาวิทยาลัยเกษตรศาสตร์</div></div></div>
+  <div class="clock"><span class="live{'' if fresh else ' stale'}">{'● LIVE' if fresh else '● ข้อมูลล่าสุด'}</span>
+    <div class="t">{now:%H:%M}</div><div class="d">{now:%d %b %Y} · ค่าวัด {state.time:%H:%M}</div></div>
+  <div class="logos"><img src="{_data_uri(ASSETS / 'logo_ku.png', 'image/png')}" alt="KU"><img src="{_data_uri(ASSETS / 'logo_sis.png', 'image/png')}" alt="SIS"></div>
+</div>""", unsafe_allow_html=True)
+    dash_header()
+
+    left, centre, right = st.columns([1, 2.65, 1], gap="medium")
+
+    def side_data():
+        """Latest state, value getter, 'device offline' test and the last 24 h (all cached, shared by both sides)."""
+        state, row, ages = dash_state()
+        g = lambda k: float(row.get(k, float("nan"))) if row is not None else float("nan")
+        now = pd.Timestamp.now(tz=TZ)
+        off = lambda d: bool(device_note(d, now - ages[d])) if d in ages else False
+        try:
+            R = recent_window(24, int(time.time() // 60))
+        except Exception:
+            R = pd.DataFrame()
+        return state, g, off, R
+
+    @st.fragment(run_every="60s")
+    def dash_left():
+        state, g, off, R = side_data()
+        T, RH, V, CO2 = state.room_T, state.room_RH, state.room_VPD, state.co2
+        st.markdown(group("อากาศในห้อง · AIR", AIR) +
+                    tile("อุณหภูมิห้อง · temperature", fmt(T, 1), "°C", "เฉลี่ย 3 จุดในห้องปลูก", AIR, T == T and T <= LIM["T_max"], off("gw")) +
+                    tile("ความชื้นสัมพัทธ์ · humidity", fmt(RH, 0), "%", f"สูงสุดที่เหมาะ {LIM['RH_max']:.0f} %", AIR, RH == RH and RH <= LIM["RH_max"], off("gw")) +
+                    tile("VPD · ความต่างแรงดันไอน้ำ", fmt(V, 2), "kPa", f"ช่วงเหมาะ {LIM['VPD_lo']}–{LIM['VPD_hi']} kPa", AIR,
+                         V == V and LIM["VPD_lo"] <= V <= LIM["VPD_hi"], off("gw")) +
+                    tile("CO₂", fmt(CO2, 0), "ppm", "ในห้องปลูก", AIR, None, off("co2")) +
+                    tile("ภายนอก · ห้องเตรียม", f"{fmt(state.ch_T['xy_md_24'], 1)}<small>°C</small> · {fmt(state.ch_T['xy_md_20'], 1)}", "°C",
+                         f"RH {fmt(state.ch_RH['xy_md_24'], 0)} % · {fmt(state.ch_RH['xy_md_20'], 0)} %", AIR, None, off("gw")),
+                    unsafe_allow_html=True)
+        if not R.empty:
+            walls = [c for c in (f"gw.xy_md_{a}_t" for a in (21, 22, 23)) if c in R]
+            st.plotly_chart(trend({"ในห้อง": R[walls].mean(axis=1) if walls else pd.Series(dtype=float),
+                                   "ภายนอก": R.get("gw.xy_md_24_t", pd.Series(dtype=float))}, "อุณหภูมิ 24 ชม.", "°C", 232),
+                            use_container_width=True, config=dict(displayModeBar=False, responsive=False), key="tv_T")
+    @st.fragment(run_every="60s")
+    def dash_right():
+        state, g, off, R = side_data()
+        ecg, phg, ecn, phn = state.ec["growing (gc1)"], state.ph["growing (gc1)"], state.ec["nursery-2 (gc2)"], state.ph["nursery-2 (gc2)"]
+        ecg_sp, ecn_sp = g("gc1.ecSetPoint"), g("gc2.ecSetPoint")
+        led = "—" if state.led != state.led else ("เปิด" if state.led >= 0.5 else "ปิด")
+        try:
+            grid = planting.tray_map(planting_rounds(int(time.time() // 600)))
+            used = int((grid.n > 0).sum()); trays_v, trays_s = f"{used}<small>/ {len(grid)} ถาด</small>", f"{used * planting.HOLES_PER_TRAY} ต้น บนชั้น 2–5"
+        except Exception:
+            trays_v, trays_s = "—", "ไม่มีข้อมูลรอบปลูก"
+        st.markdown(group("น้ำ ปุ๋ย และไฟ · WATER & LIGHT", WATER) +
+                    tile("EC ชั้นปลูก · growing", fmt(ecg, 2), "mS/cm", f"ค่าตั้ง {fmt(ecg_sp, 2)}", WATER,
+                         ecg == ecg and ecg_sp == ecg_sp and abs(ecg - ecg_sp) <= LIM["EC_tol"], off("gc1")) +
+                    tile("pH ชั้นปลูก", fmt(phg, 2), "", f"ค่าตั้ง {fmt(g('gc1.pHSetPoint'), 2)}", WATER,
+                         phg == phg and LIM["pH_lo"] <= phg <= LIM["pH_hi"], off("gc1")) +
+                    tile("ชั้นอนุบาล · EC / pH", f"{fmt(ecn, 2)}<small>mS/cm</small> · {fmt(phn, 2)}", "",
+                         f"ค่าตั้ง {fmt(ecn_sp, 2)} / {fmt(g('gc2.pHSetPoint'), 2)}", WATER,
+                         ecn == ecn and phn == phn and abs(ecn - ecn_sp) <= LIM["EC_tol"] and LIM["pH_lo"] <= phn <= LIM["pH_hi"], off("gc2")) +
+                    tile("ไฟ LED · ปั๊มน้ำ", f"{led}<small>ไฟ</small> · {'ทำงาน' if state.pump_on['gc1'] else 'หยุด'}", "",
+                         f"วันปลูกที่ {fmt(state.plant_day['growing (gc1)'], 0)} ตามตัวควบคุม", LIGHT, None, off("gc1")) +
+                    tile("ต้นพืชตอนนี้ · plants", trays_v, "", trays_s, LIGHT),
+                    unsafe_allow_html=True)
+        if not R.empty:
+            co2 = R.get("co2.CO2", pd.Series(dtype=float))
+            if co2.notna().any():
+                fig = trend({"CO₂": co2}, "CO₂ 24 ชม.", "ppm", 232)
+            else:
+                fig = trend({"EC ชั้นปลูก": R.get("gc1.ec", pd.Series(dtype=float))}, "EC ชั้นปลูก 24 ชม.", "mS/cm", 232, ecg_sp)
+            st.plotly_chart(fig, use_container_width=True, config=dict(displayModeBar=False, responsive=False), key="tv_R")
 
     with left:
+        dash_left()
+    with right:
+        dash_right()
+
+    with centre:
         @st.fragment(run_every="600s")
         def dash_twin():
             state, _, _ = dash_state()
-            fig = tw.figure_3d(var="T", st=state, cmin=20, cmax=35, height=690, title_prefix="", public=True)
+            fig = tw.figure_3d(var="T", st=state, cmin=20, cmax=35, height=660, title_prefix="", public=True)
             add_plants(fig)
-            fig.update_layout(title=dict(text="ห้องปลูก 3 มิติ · ต้นพืชตามบันทึกรอบปลูก (ชนิดพืชดูที่ผังถาดด้านล่าง) · สีชั้นปลูก = อุณหภูมิห้อง",
-                                         font=dict(size=15)),
-                              showlegend=False, margin=dict(l=0, r=0, t=36, b=0),
+            fig.update_layout(title=dict(text="ห้องปลูก 3 มิติ · ต้นพืชตามบันทึกรอบปลูก · สีชั้นปลูก = อุณหภูมิห้อง", x=0.5, xanchor="center",
+                                         font=dict(size=17)),
+                              showlegend=False, margin=dict(l=0, r=0, t=40, b=0),
                               scene_camera=dict(eye=dict(x=0.62, y=-0.95, z=0.48), center=dict(x=0.05, y=0, z=-0.12)))
             st.plotly_chart(fig, use_container_width=True, config=dict(displayModeBar=False, responsive=False), key="tv3d")
             try:
@@ -587,59 +711,19 @@ btn.onclick = async () => {
                 st.caption(f"planting sheet unavailable ({str(e)[:80]})")
         dash_twin()
 
-    with right:
-        @st.fragment(run_every="60s")
-        def dash_numbers():
-            state, row, ages = dash_state()
-            g = lambda k: float(row.get(k, float("nan"))) if row is not None else float("nan")
-            now = pd.Timestamp.now(tz=TZ)
-            gone = {d: device_note(d, now - a) for d, a in ages.items()}
-            off = lambda d: bool(gone.get(d)) or (d in ages and ages[d] > pd.Timedelta("30min"))
-            led = "—" if state.led != state.led else ("ON" if state.led >= 0.5 else "off")
-            try:
-                grid = planting.tray_map(planting_rounds(int(time.time() // 600)))
-                used = int((grid.n > 0).sum()); trays = f"{used}<small>/ {len(grid)}</small>"; holes = f"{used * planting.HOLES_PER_TRAY} หลุม"
-            except Exception:
-                trays, holes = "—", ""
-            tiles = [
-                tile("อุณหภูมิห้อง · room T", fmt(state.room_T, 1), "°C", "เฉลี่ย 3 จุดในห้อง", off("gw")),
-                tile("ความชื้น · RH", fmt(state.room_RH, 0), "%", f"VPD {fmt(state.room_VPD, 2)} kPa", off("gw")),
-                tile("CO₂", fmt(state.co2, 0), "ppm", gone.get("co2") or "", off("co2")),
-                tile("ภายนอก · outside", fmt(state.ch_T["xy_md_24"], 1), "°C", f"RH {fmt(state.ch_RH['xy_md_24'], 0)} %", off("gw")),
-                tile("EC ชั้นปลูก · growing", fmt(state.ec["growing (gc1)"], 2), "mS/cm", f"set {fmt(g('gc1.ecSetPoint'), 2)}", off("gc1")),
-                tile("pH ชั้นปลูก", fmt(state.ph["growing (gc1)"], 2), "", f"set {fmt(g('gc1.pHSetPoint'), 2)}", off("gc1")),
-                tile("EC อนุบาล · nursery", fmt(state.ec["nursery-2 (gc2)"], 2), "mS/cm", f"set {fmt(g('gc2.ecSetPoint'), 2)}", off("gc2")),
-                tile("pH อนุบาล", fmt(state.ph["nursery-2 (gc2)"], 2), "", f"set {fmt(g('gc2.pHSetPoint'), 2)}", off("gc2")),
-                tile("ไฟ LED", led, "", "ปั๊มน้ำ " + ("ทำงาน" if state.pump_on["gc1"] else "หยุด"), off("gc1")),
-                tile("ถาดที่ใช้ · trays", trays, "", holes),
-                tile("ห้องเตรียม · anteroom", fmt(state.ch_T["xy_md_20"], 1), "°C", f"RH {fmt(state.ch_RH['xy_md_20'], 0)} %", off("gw")),
-                tile("วันปลูก · plant day", fmt(state.plant_day["growing (gc1)"], 0), "", "ตามตัวควบคุม gc1", off("gc1")),
-            ]
-            st.markdown("<div class='tv-grid'>" + "".join(tiles) + "</div>", unsafe_allow_html=True)
-            try:
-                R = recent_window(24, int(time.time() // 60))
-            except Exception:
-                R = pd.DataFrame()
-            if not R.empty:
-                ch = [f"gw.xy_md_{a}_t" for a in (21, 22, 23, 20, 24)]
-                st.plotly_chart(ts_chart(R, ch, "อุณหภูมิ 24 ชม. · temperature (°C)", "°C", height=245), use_container_width=True,
-                                config=dict(displayModeBar=False, responsive=False), key="tv_T")
-                st.plotly_chart(ts_chart(R, ["co2.CO2"] if "co2.CO2" in R and R["co2.CO2"].notna().any() else [k[:-2] + "_h" for k in ch[:3]],
-                                         "CO₂ 24 ชม. (ppm)" if "co2.CO2" in R and R["co2.CO2"].notna().any() else "ความชื้น 24 ชม. (% RH)",
-                                         "", height=225), use_container_width=True, config=dict(displayModeBar=False, responsive=False), key="tv_2")
-            dev = " · ".join(f"{d} {gone.get(d) or age_text(a) + ' ago'}" for d, a in ages.items())
-            st.markdown(f"<div class='tv-status'><span>อัปเดต {state.time:%d %b %Y %H:%M} · {dev}</span></div>", unsafe_allow_html=True)
-        dash_numbers()
-    c_fs, c_exit, _ = st.columns([1.2, 1.2, 9.6])
+    c_fs, c_exit, c_note = st.columns([1.2, 1.2, 9.6])
     with c_fs:
         tv_controls()
     if c_exit.button("ออกจากโหมดจอ", type="tertiary", key="tv_exit"):
         st.switch_page(_SITE)
+    c_note.markdown("<div class='tv-foot' style='text-align:right;padding-top:6px'>ข้อมูลจากเซ็นเซอร์ IoT ในห้องปลูก (ThingsBoard) · "
+                    "ต้นพืช 3 มิติเป็นภาพประกอบตามบันทึกรอบปลูก · sis-pfal-digital-twin.streamlit.app</div>", unsafe_allow_html=True)
     st.stop()   # no footer: the screen ends here
 
 elif page == "Live":
-    top = st.columns([2.2, 1, 1, 1.2])
+    top = st.columns([2.2, 1, 1, 1.2, 1.5])
     top[0].title("ข้อมูลสด (Live)")
+    top[4].page_link(_DASH, label="จอแสดงผล · TV dashboard", icon=":material/tv:", help="หน้าจอเดียวสำหรับขึ้นจอ TV (มีปุ่มเต็มจอ) — /dashboard")
     auto = top[1].toggle("auto-refresh 60 s", value=True)
     if top[2].button("refresh now"):
         live_snapshot.clear(); recent_window.clear()
