@@ -26,7 +26,7 @@ sys.path.insert(0, str(ROOT))
 import os  # noqa: E402
 os.environ["PYTHONPATH"] = str(ROOT) + os.pathsep + os.environ.get("PYTHONPATH", "")
 NEEDS_PKG = "2026.11.11.2"
-APP_BUILD = "2026-11-11 c"          # shown in the footer so everyone can tell which version is running
+APP_BUILD = "2026-11-11 d"          # shown in the footer so everyone can tell which version is running
 import pfal_twin  # noqa: E402
 if getattr(pfal_twin, "__version__", "") != NEEDS_PKG:
     for _m in [m for m in sys.modules if m == "pfal_twin" or m.startswith("pfal_twin.")]:
@@ -381,6 +381,10 @@ tw = get_twin(STORE_VERSION, NEEDS_PKG, id(DigitalTwin))
 st.sidebar.markdown(f"**{PROJECT['name']}**  \n<small>{PROJECT['th']}</small>", unsafe_allow_html=True)
 PAGES = {"Overview": "ภาพรวม (Overview)", "Live": "ข้อมูลสด (Live)", "History": "ข้อมูลย้อนหลัง (History)",
          "Layout & water": "ผังห้องและระบบน้ำ (Layout & water)", "What-if": "จำลองสถานการณ์ (What-if)"}
+# closed to the public for now (code kept): remove a name to show it again
+HIDDEN_PAGES = {"Layout & water"}
+SHOW_ALL_KEYS = False   # Live page: raw table of every ThingsBoard key (an engineering view; charts and cards show the values)
+PAGES = {k: v for k, v in PAGES.items() if k not in HIDDEN_PAGES}
 _label = st.sidebar.radio("Page", list(PAGES.values()), label_visibility="collapsed")
 page = {v: k for k, v in PAGES.items()}[_label]
 VAR_LABEL = {"T": "air temperature (°C)", "RH": "relative humidity (%)", "VPD": "VPD (kPa)"}
@@ -432,10 +436,12 @@ if page == "Overview":
 #### แอปนี้ทำอะไรได้ · What this app does
 Digital twin = แบบจำลองห้องปลูกจริง (รูปทรงจาก LiDAR) ที่ผูกกับข้อมูลเซ็นเซอร์จริงจาก ThingsBoard — ดูสภาพห้อง **ตอนนี้**, **ย้อนหลัง** และ **ลองสถานการณ์** ได้จากที่เดียว
 """)
-    k1, k2, k3, k4 = st.columns(4)
+    cards = st.columns(4 - ("Layout & water" in HIDDEN_PAGES))
+    k1, k2, k4 = cards[0], cards[1], cards[-1]
+    k3 = cards[2] if len(cards) == 4 else None
     k1.markdown("**📡 Live**  \nกราฟแบบ dashboard (T/RH 5 จุด, CO₂, EC/pH + set-point, การจ่ายปุ๋ย) + twin 3-D ระบายสีตามค่าจริง รีเฟรชทุก 60 วิ  \n*Real-time charts and the 3-D twin coloured by live readings*")
     k2.markdown("**🕓 History**  \nเลื่อนเวลาดูห้อง ณ ช่วงใดก็ได้ตั้งแต่ ธ.ค. 2025, กราฟ, KPI, เหตุการณ์ผิดปกติ, ดาวน์โหลด CSV  \n*Time slider, KPIs, events and CSV export since Dec 2025*")
-    k3.markdown("**🗺️ Layout & water**  \nผัง as-built จาก point cloud, ระบบท่อน้ำ/ปุ๋ย, process flow และแอนิเมชันการไหล  \n*As-built layout, pipework and flow animation*")
+    if k3: k3.markdown("**🗺️ Layout & water**  \nผัง as-built จาก point cloud, ระบบท่อน้ำ/ปุ๋ย, process flow และแอนิเมชันการไหล  \n*As-built layout, pipework and flow animation*")
     k4.markdown("**🌱 What-if**  \nเลือกสัดส่วนผักบน 720 หลุม (ชั้น 2–5) ดูผังรายหลุม 3-D + ผลผลิต/รายได้/แสงที่ต้องการ, สถานการณ์แสง–พลังงาน  \n*Crop-mix and light/energy scenarios*")
 
     def device_status_text() -> str:
@@ -526,8 +532,8 @@ elif page == "Live":
         # ---- details, collapsed (the charts already show the numbers)
         with st.expander("current values as cards" + (" + controller state / dosing configuration" if extended else "")):
             state_cards(state, None, row)
-        with st.expander("latest values — all keys" if extended else "latest values — dashboard keys"):
-            if table is not None:
+        if SHOW_ALL_KEYS and table is not None:
+            with st.expander("latest values — all keys" if extended else "latest values — dashboard keys"):
                 t2 = table if extended else table[table.index.isin(tb.DASHBOARD_COLUMNS)]
                 t2 = t2.copy(); t2["age"] = t2["age"].map(age_text); t2["ts"] = t2["ts"].dt.strftime("%Y-%m-%d %H:%M:%S")
                 t2.insert(0, "meaning", [tb.KEY_LABELS.get(k, "") for k in t2["key"]]); t2["on dashboard"] = t2.index.isin(tb.DASHBOARD_COLUMNS)
