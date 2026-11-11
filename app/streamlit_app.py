@@ -26,7 +26,7 @@ sys.path.insert(0, str(ROOT))
 import os  # noqa: E402
 os.environ["PYTHONPATH"] = str(ROOT) + os.pathsep + os.environ.get("PYTHONPATH", "")
 NEEDS_PKG = "2026.11.11.2"
-APP_BUILD = "2026-11-11 b"          # shown in the footer so everyone can tell which version is running
+APP_BUILD = "2026-11-11 c"          # shown in the footer so everyone can tell which version is running
 import pfal_twin  # noqa: E402
 if getattr(pfal_twin, "__version__", "") != NEEDS_PKG:
     for _m in [m for m in sys.modules if m == "pfal_twin" or m.startswith("pfal_twin.")]:
@@ -473,6 +473,8 @@ elif page == "Live":
         live_snapshot.clear(); recent_window.clear()
     hours = top[3].selectbox("window", [6, 12, 24, 72, 168], index=2, format_func=lambda h: f"{h} h" if h < 48 else f"{h // 24} days")
 
+    planting_section()   # top of the page, outside the 60-s fragment: the sheet is re-read every 10 min
+
     @st.fragment(run_every="60s" if auto else None)
     def live_view():
         # ---- latest state (for the status line and the 3-D twin)
@@ -488,7 +490,12 @@ elif page == "Live":
         st.caption(f"**{state.time:%Y-%m-%d %H:%M:%S}** Asia/Bangkok · " + " · ".join(f"{d} {device_note(d, now - a) or age_text(a) + ' ago'}" for d, a in (ages or {}).items())
                    + (f" · ⚠ stale: {', '.join(stale)}" if stale else ""))
 
-        # ---- charts first (same window and 5-min averaging as the ThingsBoard dashboard)
+        # ---- the twin itself
+        st.markdown("#### 3-D twin — coloured by the latest readings")
+        var = colour_picker("var_live"); lo, hi = RANGES[var]
+        st.plotly_chart(tw.figure_3d(var=var, st=state, cmin=lo, cmax=hi, height=620, title_prefix="LIVE ", public=not extended), **PLOTLY, key=f"live3d_{var}")
+
+        # ---- charts (same window and 5-min averaging as the ThingsBoard dashboard)
         try:
             R = recent_window(hours, int(time.time() // 60))
         except Exception as e:
@@ -516,11 +523,6 @@ elif page == "Live":
             if extended:
                 st.plotly_chart(ts_chart(R, ["gc1.led", "gc1.pwmWater", "gc2.pwmWater", "co2.Relay_co2"], "LED / circulation pumps / CO₂ valve (beyond the dashboard)", "on = 1", step=True, height=220), use_container_width=True, key="ts_ctrl")
 
-        # ---- the twin itself
-        st.markdown("#### 3-D twin — coloured by the latest readings")
-        var = colour_picker("var_live"); lo, hi = RANGES[var]
-        st.plotly_chart(tw.figure_3d(var=var, st=state, cmin=lo, cmax=hi, height=620, title_prefix="LIVE ", public=not extended), **PLOTLY, key=f"live3d_{var}")
-
         # ---- details, collapsed (the charts already show the numbers)
         with st.expander("current values as cards" + (" + controller state / dosing configuration" if extended else "")):
             state_cards(state, None, row)
@@ -532,7 +534,6 @@ elif page == "Live":
                 st.dataframe(t2[["meaning", "value", "ts", "age", "on dashboard"]], width="stretch", height=480)
 
     live_view()
-    planting_section()   # outside the 60-s fragment: the sheet is re-read every 10 min
 
 # ============================================================================ HISTORY
 elif page == "History":
