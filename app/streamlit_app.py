@@ -26,7 +26,7 @@ sys.path.insert(0, str(ROOT))
 import os  # noqa: E402
 os.environ["PYTHONPATH"] = str(ROOT) + os.pathsep + os.environ.get("PYTHONPATH", "")
 NEEDS_PKG = "2026.11.11.4"
-APP_BUILD = "2026-11-11 g"          # shown in the footer so everyone can tell which version is running
+APP_BUILD = "2026-11-11 i"          # shown in the footer so everyone can tell which version is running
 import pfal_twin  # noqa: E402
 if getattr(pfal_twin, "__version__", "") != NEEDS_PKG:
     for _m in [m for m in sys.modules if m == "pfal_twin" or m.startswith("pfal_twin.")]:
@@ -47,6 +47,13 @@ DEVICE_STATUS = {"gc2": dict(since="2026-09-16", **FLOOD), "gc1": dict(since="20
 # "since" = last valid data (flood) or the date of the note; a device that reports after that day clears its own note
 PROJECT = dict(name="SIS PFAL Digital Twin", th="โรงประลอง · วิทยาลัยบูรณาการศาสตร์ มหาวิทยาลัยเกษตรศาสตร์",
                en="Fab Lab · School of Integrated Science, Kasetsart University")
+# Two URLs: / = the site (pages in the sidebar radio below), /dashboard = the TV screen. Hidden navigation only routes;
+# both run this same script, which then draws the page that belongs to the URL.
+_SITE = st.Page(lambda: None, title="SIS PFAL", url_path="site", default=True)
+_DASH = st.Page(lambda: None, title="SIS PFAL Dashboard", url_path="dashboard")
+_nav = st.navigation([_SITE, _DASH], position="hidden")
+_nav.run()
+ON_DASHBOARD = _nav.url_path == "dashboard"
 # tab title in the same pattern as BURANA and SISoil: "NAME ชื่อไทย · คำอธิบาย"
 st.set_page_config(page_title="SIS PFAL ห้องปลูกพืชระบบปิด · ดิจิทัลทวินของห้องปลูกพืชด้วยแสงเทียม", layout="wide",
                    page_icon=str(ASSETS / "favicon.png"))
@@ -267,6 +274,19 @@ def plant_meshes(_nonce: int, day: str) -> list:
     return plants3d.plant_traces(plants3d.plant_table(planting_rounds(_nonce), holes, day))
 
 
+def add_plants(fig) -> bool:
+    """Add today's plants to a 3-D twin figure; fade the rack's temperature box so they show through. False if unavailable."""
+    try:
+        meshes = plant_meshes(int(time.time() // 600), str(pd.Timestamp.now(tz=TZ).date()))
+    except Exception:
+        return False
+    fig.add_traces(meshes)
+    for t in fig.data:
+        if t.type == "mesh3d" and t.opacity == 0.55:
+            t.opacity = 0.15
+    return True
+
+
 CROP_COLOURS = ["#cfe3c4", "#f3d9b1", "#c9dcef", "#ead1e4", "#f1e7a8", "#cde9e3", "#e4d6c3", "#d8d3ef", "#f2cfc4", "#dfe7c0"]
 
 
@@ -375,7 +395,7 @@ def state_cards(state, ages: dict | None = None, row=None):
 # ---------------------------------------------------------------------------- sidebar
 tw = get_twin(STORE_VERSION, NEEDS_PKG, id(DigitalTwin))
 st.sidebar.markdown(f"**{PROJECT['name']}**  \n<small>{PROJECT['th']}</small>", unsafe_allow_html=True)
-PAGES = {"Overview": "ภาพรวม (Overview)", "Live": "ข้อมูลสด (Live)", "History": "ข้อมูลย้อนหลัง (History)",
+PAGES = {"Overview": "ภาพรวม (Overview)", "Dashboard": "จอแสดงผล (Dashboard · TV)", "Live": "ข้อมูลสด (Live)", "History": "ข้อมูลย้อนหลัง (History)",
          "Layout & water": "ผังห้องและระบบน้ำ (Layout & water)", "What-if": "จำลองสถานการณ์ (What-if)"}
 # closed to the public for now (code kept): remove a name to show it again
 HIDDEN_PAGES = {"Layout & water"}
@@ -383,6 +403,10 @@ SHOW_ALL_KEYS = False   # Live page: raw table of every ThingsBoard key (an engi
 PAGES = {k: v for k, v in PAGES.items() if k not in HIDDEN_PAGES}
 _label = st.sidebar.radio("Page", list(PAGES.values()), label_visibility="collapsed")
 page = {v: k for k, v in PAGES.items()}[_label]
+if ON_DASHBOARD:                                     # …/dashboard (the TV bookmarks this)
+    page = "Dashboard"
+elif page == "Dashboard" or st.query_params.get("page") == "dashboard":   # menu choice, or an old ?page=dashboard link
+    st.switch_page(_DASH)
 VAR_LABEL = {"T": "air temperature (°C)", "RH": "relative humidity (%)", "VPD": "VPD (kPa)"}
 
 
@@ -467,6 +491,142 @@ Digital twin = แบบจำลองห้องปลูกจริง (ร
     st.caption("Model parameters of the what-if layer are schematic until calibrated with PPFD and harvest measurements (LED: 30 × 42 W lamps per growing tier). Photos: site survey 13 Sep 2026.")
 
 # ============================================================================ LIVE
+elif page == "Dashboard":
+    # one 1920 x 1080 screen, no scrolling: header (name + logos) | 3-D twin with plants + tray map | big numbers + 24-h charts
+    st.markdown("""<style>
+    section[data-testid="stSidebar"], [data-testid="stSidebarCollapsedControl"], header[data-testid="stHeader"],
+    [data-testid="stToolbar"], footer {display: none !important;}
+    .block-container {padding: 0.5rem 1.2rem 0 1.2rem !important; max-width: 100% !important;}
+    /* screens >= 1000 px: lay the page out at 1920 px from the start (charts are drawn at that width); the script in
+       tv_controls() then only scales it (CSS transform) to fit the screen */
+    @media (min-width: 1000px) {
+      .block-container {width: 1920px !important; max-width: 1920px !important; flex: none !important;
+                        align-self: flex-start !important; transform-origin: top left;}
+      [data-testid="stMain"] {overflow: hidden !important;}
+    }
+    .stApp [data-testid="stVerticalBlock"] {gap: 0.35rem;}
+    .pfal-top {padding: 0 0 6px !important; margin-bottom: 2px !important;}
+    .tv-grid {display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; padding-bottom: 12px;}
+    .tv-tile {background: #ffffff; border: 1px solid #e3dfd4; border-radius: 10px; padding: 8px 12px; min-height: 92px;}
+    .tv-tile .l {font-size: 13px; color: #6b665c; line-height: 1.2;}
+    .tv-tile .v {font-size: 34px; font-weight: 700; color: #22201c; line-height: 1.15; white-space: nowrap;}
+    .tv-tile .v small {font-size: 15px; font-weight: 500; color: #6b665c; margin-left: 3px;}
+    .tv-tile .s {font-size: 12.5px; color: #6b665c;}
+    .tv-tile.off .v {color: #a19c90; font-size: 22px;}
+    .tv-status {font-size: 13px; color: #6b665c; display: flex; justify-content: space-between;}
+    .tv-status a {color: #6b665c;}
+    </style>""", unsafe_allow_html=True)
+
+    def tv_controls():
+        """Full-screen button + fit-to-screen: the page is laid out for 1920 x 1080 and scaled (CSS transform) to any
+        screen at least 1000 px wide, so a 4K TV, a 1080p TV and a laptop all show the whole page without scrolling;
+        narrower screens (phones) get the normal stacked layout. Runs in a component iframe and acts on the app page."""
+        import streamlit.components.v1 as components
+        components.html("""
+<div style="display:flex;gap:8px;justify-content:flex-end;align-items:center;font:13px 'IBM Plex Sans Thai',sans-serif">
+  <span id="hint" style="color:#6b665c"></span>
+  <button id="fs" style="font:inherit;padding:4px 12px;border:1px solid #e3dfd4;border-radius:8px;background:#fff;cursor:pointer">⛶ เต็มจอ · full screen</button>
+  <a href="/" target="_top" style="color:#6b665c">ออกจากโหมดจอ</a>
+</div>
+<script>
+const P = window.parent, D = P.document, W0 = 1920, H0 = 1080;
+function fit() {            // the 1920-px layout itself comes from the page CSS; here only the scale and centring
+  const bc = D.querySelector('.block-container');
+  if (!bc) return;
+  const w = P.innerWidth, h = P.innerHeight;
+  if (w < 1000) { bc.style.removeProperty('transform'); bc.style.removeProperty('margin-left'); return; }   // phones: stacked page
+  const k = Math.min(w / W0, h / H0);
+  bc.style.setProperty('transform', 'scale(' + k + ')', 'important');
+  bc.style.setProperty('margin-left', Math.max(0, (w - W0 * k) / 2) + 'px', 'important');
+}
+P.addEventListener('resize', fit); setInterval(fit, 1500); fit();
+const btn = document.getElementById('fs'), hint = document.getElementById('hint');
+function label() { btn.textContent = D.fullscreenElement ? '⤢ ออกจากเต็มจอ' : '⛶ เต็มจอ · full screen'; }
+D.addEventListener('fullscreenchange', () => { label(); setTimeout(fit, 200); });
+btn.onclick = async () => {
+  try {
+    if (D.fullscreenElement) await D.exitFullscreen(); else await D.documentElement.requestFullscreen();
+  } catch (e) { hint.textContent = 'เบราว์เซอร์ไม่อนุญาต: กด F11 แทน'; }
+};
+</script>""", height=34)
+
+    def tile(label, value, unit="", sub="", off=False):
+        return (f"<div class='tv-tile{' off' if off else ''}'><div class='l'>{label}</div>"
+                f"<div class='v'>{value}<small>{unit}</small></div><div class='s'>{sub}</div></div>")
+
+    def dash_state():
+        try:
+            st_, table = live_snapshot(int(time.time() // 60))
+            return st_, table["value"], table.groupby("device")["age"].min().to_dict()
+        except Exception:   # ThingsBoard down -> last stored bin
+            return tw.state(d1), tw.data.loc[tw.state(d1).time], {}
+
+    left, right = st.columns([1.5, 1], gap="medium")
+
+    with left:
+        @st.fragment(run_every="600s")
+        def dash_twin():
+            state, _, _ = dash_state()
+            fig = tw.figure_3d(var="T", st=state, cmin=20, cmax=35, height=690, title_prefix="", public=True)
+            add_plants(fig)
+            fig.update_layout(title=dict(text="ห้องปลูก 3 มิติ · ต้นพืชตามบันทึกรอบปลูก (ชนิดพืชดูที่ผังถาดด้านล่าง) · สีชั้นปลูก = อุณหภูมิห้อง",
+                                         font=dict(size=15)),
+                              showlegend=False, margin=dict(l=0, r=0, t=36, b=0),
+                              scene_camera=dict(eye=dict(x=0.62, y=-0.95, z=0.48), center=dict(x=0.05, y=0, z=-0.12)))
+            st.plotly_chart(fig, use_container_width=True, config=dict(displayModeBar=False, responsive=False), key="tv3d")
+            try:
+                grid = planting.tray_map(planting_rounds(int(time.time() // 600)))
+                st.markdown(tray_map_html(grid), unsafe_allow_html=True)
+            except Exception as e:
+                st.caption(f"planting sheet unavailable ({str(e)[:80]})")
+        dash_twin()
+
+    with right:
+        @st.fragment(run_every="60s")
+        def dash_numbers():
+            state, row, ages = dash_state()
+            g = lambda k: float(row.get(k, float("nan"))) if row is not None else float("nan")
+            now = pd.Timestamp.now(tz=TZ)
+            gone = {d: device_note(d, now - a) for d, a in ages.items()}
+            off = lambda d: bool(gone.get(d)) or (d in ages and ages[d] > pd.Timedelta("30min"))
+            led = "—" if state.led != state.led else ("ON" if state.led >= 0.5 else "off")
+            try:
+                grid = planting.tray_map(planting_rounds(int(time.time() // 600)))
+                used = int((grid.n > 0).sum()); trays = f"{used}<small>/ {len(grid)}</small>"; holes = f"{used * planting.HOLES_PER_TRAY} หลุม"
+            except Exception:
+                trays, holes = "—", ""
+            tiles = [
+                tile("อุณหภูมิห้อง · room T", fmt(state.room_T, 1), "°C", "เฉลี่ย 3 จุดในห้อง", off("gw")),
+                tile("ความชื้น · RH", fmt(state.room_RH, 0), "%", f"VPD {fmt(state.room_VPD, 2)} kPa", off("gw")),
+                tile("CO₂", fmt(state.co2, 0), "ppm", gone.get("co2") or "", off("co2")),
+                tile("ภายนอก · outside", fmt(state.ch_T["xy_md_24"], 1), "°C", f"RH {fmt(state.ch_RH['xy_md_24'], 0)} %", off("gw")),
+                tile("EC ชั้นปลูก · growing", fmt(state.ec["growing (gc1)"], 2), "mS/cm", f"set {fmt(g('gc1.ecSetPoint'), 2)}", off("gc1")),
+                tile("pH ชั้นปลูก", fmt(state.ph["growing (gc1)"], 2), "", f"set {fmt(g('gc1.pHSetPoint'), 2)}", off("gc1")),
+                tile("EC อนุบาล · nursery", fmt(state.ec["nursery-2 (gc2)"], 2), "mS/cm", f"set {fmt(g('gc2.ecSetPoint'), 2)}", off("gc2")),
+                tile("pH อนุบาล", fmt(state.ph["nursery-2 (gc2)"], 2), "", f"set {fmt(g('gc2.pHSetPoint'), 2)}", off("gc2")),
+                tile("ไฟ LED", led, "", "ปั๊มน้ำ " + ("ทำงาน" if state.pump_on["gc1"] else "หยุด"), off("gc1")),
+                tile("ถาดที่ใช้ · trays", trays, "", holes),
+                tile("ห้องเตรียม · anteroom", fmt(state.ch_T["xy_md_20"], 1), "°C", f"RH {fmt(state.ch_RH['xy_md_20'], 0)} %", off("gw")),
+                tile("วันปลูก · plant day", fmt(state.plant_day["growing (gc1)"], 0), "", "ตามตัวควบคุม gc1", off("gc1")),
+            ]
+            st.markdown("<div class='tv-grid'>" + "".join(tiles) + "</div>", unsafe_allow_html=True)
+            try:
+                R = recent_window(24, int(time.time() // 60))
+            except Exception:
+                R = pd.DataFrame()
+            if not R.empty:
+                ch = [f"gw.xy_md_{a}_t" for a in (21, 22, 23, 20, 24)]
+                st.plotly_chart(ts_chart(R, ch, "อุณหภูมิ 24 ชม. · temperature (°C)", "°C", height=245), use_container_width=True,
+                                config=dict(displayModeBar=False, responsive=False), key="tv_T")
+                st.plotly_chart(ts_chart(R, ["co2.CO2"] if "co2.CO2" in R and R["co2.CO2"].notna().any() else [k[:-2] + "_h" for k in ch[:3]],
+                                         "CO₂ 24 ชม. (ppm)" if "co2.CO2" in R and R["co2.CO2"].notna().any() else "ความชื้น 24 ชม. (% RH)",
+                                         "", height=225), use_container_width=True, config=dict(displayModeBar=False, responsive=False), key="tv_2")
+            dev = " · ".join(f"{d} {gone.get(d) or age_text(a) + ' ago'}" for d, a in ages.items())
+            st.markdown(f"<div class='tv-status'><span>อัปเดต {state.time:%d %b %Y %H:%M} · {dev}</span></div>", unsafe_allow_html=True)
+        dash_numbers()
+    tv_controls()
+    st.stop()   # no footer: the screen ends here
+
 elif page == "Live":
     top = st.columns([2.2, 1, 1, 1.2])
     top[0].title("ข้อมูลสด (Live)")
@@ -497,15 +657,11 @@ elif page == "Live":
         lo, hi = RANGES[var]
         fig = tw.figure_3d(var=var, st=state, cmin=lo, cmax=hi, height=620, title_prefix="LIVE ", public=not extended)
         if show_plants:
-            try:
-                fig.add_traces(plant_meshes(int(time.time() // 600), str(pd.Timestamp.now(tz=TZ).date())))
-                for t in fig.data:   # temperature boxes over the rack: fainter, so the plants inside show through
-                    if t.type == "mesh3d" and t.opacity == 0.55:
-                        t.opacity = 0.15
+            if add_plants(fig):
                 fig.update_layout(legend=dict(orientation="h", yanchor="top", y=-0.02, xanchor="left", x=0, font=dict(size=11)),
                                   margin=dict(b=90))
-            except Exception as e:
-                st.caption(f"plants unavailable ({str(e)[:100]})")
+            else:
+                st.caption("plants unavailable (planting sheet not reachable)")
         st.plotly_chart(fig, **PLOTLY, key=f"live3d_{var}_{show_plants}")
         if show_plants:
             st.caption("ต้นพืชวาดตามบันทึกรอบปลูก หนึ่งต้นต่อหลุม ทรงใบตามชนิดผัก ขนาดตามจำนวนวันบนชั้นปลูกเทียบกับวันที่วางแผนไว้ (ภาพประกอบ ไม่ใช่ขนาดที่วัดจริง)")
