@@ -26,7 +26,7 @@ sys.path.insert(0, str(ROOT))
 import os  # noqa: E402
 os.environ["PYTHONPATH"] = str(ROOT) + os.pathsep + os.environ.get("PYTHONPATH", "")
 NEEDS_PKG = "2026.11.11.4"
-APP_BUILD = "2026-11-11 m"          # shown in the footer so everyone can tell which version is running
+APP_BUILD = "2026-11-11 o"          # shown in the footer so everyone can tell which version is running
 import pfal_twin  # noqa: E402
 if getattr(pfal_twin, "__version__", "") != NEEDS_PKG:
     for _m in [m for m in sys.modules if m == "pfal_twin" or m.startswith("pfal_twin.")]:
@@ -537,6 +537,9 @@ elif page == "Dashboard":
     .tv-foot {font-size: 13px; color: #8a857a;}
     </style>""", unsafe_allow_html=True)
     AIR, WATER, LIGHT = "#1f6b67", "#2f6fa3", "#c98a1b"     # group accents: air, nutrient solution, light & plants
+    # Chart widths are fixed for the 1920-px layout (columns 1 : 2.65 : 1).
+    # With use_container_width Streamlit re-measures on every refresh - and measures the *scaled* box, so charts shrank.
+    SIDE_W, CENTRE_W = 374, 1040   # a little under the measured column widths (382, 1047): wider would be clamped
     LIM = tw.limits
 
     def tv_controls():
@@ -594,7 +597,16 @@ btn.onclick = async () => {
         except Exception:   # ThingsBoard down -> last stored bin
             return tw.state(d1), tw.data.loc[tw.state(d1).time], {}
 
-    def trend(lines: dict, title: str, unit: str, height: int, ref: float | None = None):
+    def framed_chart(fig, height: int, static: bool = True):
+        """A chart in its own frame. st.plotly_chart measures its width from the *scaled* page (on a refresh, or when it is
+        drawn after the scaling) and shrank; inside a frame plotly measures the frame, laid out at the unscaled size."""
+        import streamlit.components.v1 as components
+        components.html('<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;600&display=swap" rel="stylesheet">'
+                        '<style>body{margin:0;background:#fff}</style>'
+                        + fig.to_html(full_html=False, include_plotlyjs="cdn", config=dict(displayModeBar=False, staticPlot=static)),
+                        height=height + 4)
+
+    def trend(lines: dict, title: str, unit: str, height: int, ref: float | None = None, width: int = SIDE_W):
         """Compact 24-h trend for the TV: a few thick lines, legend on top, optional dashed reference (set-point)."""
         import plotly.graph_objects as go
         fig = go.Figure()
@@ -605,7 +617,8 @@ btn.onclick = async () => {
         if ref == ref and ref is not None:
             fig.add_hline(y=ref, line=dict(color="#c0392b", width=2, dash="dash"), annotation_text=f"set {ref:.2f}",
                           annotation_position="top left", annotation_font=dict(color="#c0392b", size=12))
-        fig.update_layout(title=dict(text=title, x=0, font=dict(size=15)), height=height, margin=dict(l=40, r=10, t=56, b=28),
+        fig.update_layout(title=dict(text=title, x=0, font=dict(size=15)), height=height, width=width, autosize=False,
+                          margin=dict(l=40, r=10, t=56, b=28),
                           legend=dict(orientation="h", y=1.02, yanchor="bottom", x=0, font=dict(size=12)), yaxis_title=unit,
                           paper_bgcolor="#ffffff", plot_bgcolor="#ffffff", xaxis=dict(tickformat="%H:%M", nticks=7))
         return fig
@@ -654,9 +667,8 @@ btn.onclick = async () => {
                     unsafe_allow_html=True)
         if not R.empty:
             walls = [c for c in (f"gw.xy_md_{a}_t" for a in (21, 22, 23)) if c in R]
-            st.plotly_chart(trend({"ในห้อง": R[walls].mean(axis=1) if walls else pd.Series(dtype=float),
-                                   "ภายนอก": R.get("gw.xy_md_24_t", pd.Series(dtype=float))}, "อุณหภูมิ 24 ชม.", "°C", 232),
-                            use_container_width=True, config=dict(displayModeBar=False, responsive=False), key="tv_T")
+            framed_chart(trend({"ในห้อง": R[walls].mean(axis=1) if walls else pd.Series(dtype=float),
+                                "ภายนอก": R.get("gw.xy_md_24_t", pd.Series(dtype=float))}, "อุณหภูมิ 24 ชม.", "°C", 232), 232)
     @st.fragment(run_every="60s")
     def dash_right():
         state, g, off, R = side_data()
@@ -686,7 +698,7 @@ btn.onclick = async () => {
                 fig = trend({"CO₂": co2}, "CO₂ 24 ชม.", "ppm", 232)
             else:
                 fig = trend({"EC ชั้นปลูก": R.get("gc1.ec", pd.Series(dtype=float))}, "EC ชั้นปลูก 24 ชม.", "mS/cm", 232, ecg_sp)
-            st.plotly_chart(fig, use_container_width=True, config=dict(displayModeBar=False, responsive=False), key="tv_R")
+            framed_chart(fig, 232)
 
     with left:
         dash_left()
@@ -701,9 +713,9 @@ btn.onclick = async () => {
             add_plants(fig)
             fig.update_layout(title=dict(text="ห้องปลูก 3 มิติ · ต้นพืชตามบันทึกรอบปลูก · สีชั้นปลูก = อุณหภูมิห้อง", x=0.5, xanchor="center",
                                          font=dict(size=17)),
-                              showlegend=False, margin=dict(l=0, r=0, t=40, b=0),
+                              showlegend=False, margin=dict(l=0, r=0, t=40, b=0), width=CENTRE_W, autosize=False,
                               scene_camera=dict(eye=dict(x=0.62, y=-0.95, z=0.48), center=dict(x=0.05, y=0, z=-0.12)))
-            st.plotly_chart(fig, use_container_width=True, config=dict(displayModeBar=False, responsive=False), key="tv3d")
+            framed_chart(fig, 660, static=False)   # the 3-D view can still be turned with the mouse
             try:
                 grid = planting.tray_map(planting_rounds(int(time.time() // 600)))
                 st.markdown(tray_map_html(grid), unsafe_allow_html=True)
