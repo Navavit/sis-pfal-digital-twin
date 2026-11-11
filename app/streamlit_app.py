@@ -25,8 +25,8 @@ sys.path.insert(0, str(ROOT))
 # is already loaded (version mismatch), drop it and re-import.
 import os  # noqa: E402
 os.environ["PYTHONPATH"] = str(ROOT) + os.pathsep + os.environ.get("PYTHONPATH", "")
-NEEDS_PKG = "2026.11.11.2"
-APP_BUILD = "2026-11-11 d"          # shown in the footer so everyone can tell which version is running
+NEEDS_PKG = "2026.11.11.3"
+APP_BUILD = "2026-11-11 f"          # shown in the footer so everyone can tell which version is running
 import pfal_twin  # noqa: E402
 if getattr(pfal_twin, "__version__", "") != NEEDS_PKG:
     for _m in [m for m in sys.modules if m == "pfal_twin" or m.startswith("pfal_twin.")]:
@@ -35,7 +35,7 @@ if getattr(pfal_twin, "__version__", "") != NEEDS_PKG:
 else:
     st_cache_clear = False
 from pfal_twin.twin import DigitalTwin  # noqa: E402
-from pfal_twin import thingsboard as tb, models as M, store, planting  # noqa: E402
+from pfal_twin import thingsboard as tb, models as M, store, planting, plants3d  # noqa: E402
 
 ASSETS = Path(__file__).resolve().parent / "assets"
 # Devices known to be out of service on purpose (edit when one goes away or comes back). Shown instead of "stale".
@@ -260,6 +260,13 @@ def planting_rounds(_nonce: int) -> pd.DataFrame:
     return planting.load()
 
 
+@st.cache_resource(ttl=600, show_spinner=False, max_entries=2)
+def plant_meshes(_nonce: int, day: str) -> list:
+    """3-D plants of tiers 2-5 for `day` (one mesh per crop), rebuilt when the planting sheet is re-read."""
+    holes = M.hole_positions(tw.model, M.HoleLayout())
+    return plants3d.plant_traces(plants3d.plant_table(planting_rounds(_nonce), holes, day))
+
+
 CROP_COLOURS = ["#cfe3c4", "#f3d9b1", "#c9dcef", "#ead1e4", "#f1e7a8", "#cde9e3", "#e4d6c3", "#d8d3ef", "#f2cfc4", "#dfe7c0"]
 
 
@@ -296,23 +303,12 @@ def planting_section():
         st.info(f"ยังอ่านข้อมูลรอบปลูกไม่ได้ · planting sheet unavailable ({str(e)[:120]})")
         return
     grid = planting.tray_map(rounds)
-    used = int((grid.n > 0).sum()); clash = int((grid.n > 1).sum()); total = len(grid)
-    m = st.columns(4)
+    used = int((grid.n > 0).sum()); total = len(grid)
+    m = st.columns(3)
     m[0].metric("ถาดที่ใช้ · trays in use", f"{used} / {total}")
     m[1].metric("หลุมที่ใช้ · holes in use", f"{used * planting.HOLES_PER_TRAY} / {total * planting.HOLES_PER_TRAY}")
     m[2].metric("ชนิดพืช · crops", len({c for cs in grid.crop if cs for c in cs.split(" / ")}))
-    m[3].metric("ถาดที่ข้อมูลชนกัน · conflicts", clash)
     st.markdown(tray_map_html(grid), unsafe_allow_html=True)
-    if clash:
-        st.warning(f"{clash} ถาดมีพืชมากกว่าหนึ่งรายการในข้อมูลรอบปลูก ให้แก้ชั้น/ถาดในแท็บ รอบปลูก (ดูคอลัมน์ ตรวจสอบ) · "
-                   f"{clash} trays are claimed by more than one block in the planting log")
-    up = planting.upcoming_harvests(rounds)
-    if len(up):
-        st.markdown("**กำหนดเก็บเกี่ยวใน 3 สัปดาห์ · harvests in the next 3 weeks**")
-        show = pd.DataFrame({"วันเก็บ (คาด)": up["harvest_plan"].dt.strftime("%d %b %Y"), "อีก (วัน)": up["days_left"],
-                             "พืช": up["crop"], "ชั้น": up["tier"], "ถาด": up["tray_from"].astype(str) + "–" + up["tray_to"].astype(str),
-                             "หลุม": up["holes"], "รอบ": up["round"]})
-        st.dataframe(show, hide_index=True, width="stretch")
     st.caption(f"จากบันทึกรอบปลูกของทีม ([PFAL รอบปลูก]({planting.SHEET_URL})) อัปเดตทุก 10 นาที · ชั้น 1 (เพาะกล้า) ไม่แสดง · "
                "1 ถาด = 18 หลุม (6 × 3), ชั้นละ 10 ถาด · วันเก็บเป็นค่าคาดตามชนิดพืช")
 
@@ -481,25 +477,51 @@ elif page == "Live":
 
     planting_section()   # top of the page, outside the 60-s fragment: the sheet is re-read every 10 min
 
-    @st.fragment(run_every="60s" if auto else None)
-    def live_view():
-        # ---- latest state (for the status line and the 3-D twin)
+    def current_state():
+        """Latest TwinState and key table from ThingsBoard, or the last stored bin when it is unreachable."""
         try:
-            state, table = live_snapshot(int(time.time() // 60))
+            return live_snapshot(int(time.time() // 60))
         except Exception as e:  # network / ThingsBoard down -> fall back to the last stored bin
             st.error(f"ThingsBoard not reachable ({e}); showing the last stored 10-min bin instead.")
-            state, table = tw.state(d1), None
+            return tw.state(d1), None
+
+    # the twin carries ~700 plant meshes (a few MB): its own fragment, redrawn every 10 min instead of every minute
+    @st.fragment(run_every="600s" if auto else None)
+    def twin_view():
+        state, _ = current_state()
+        st.markdown("#### 3-D twin — coloured by the latest readings")
+        c = st.columns([3, 1])
+        with c[0]:
+            var = colour_picker("var_live")
+        show_plants = c[1].toggle("แสดงต้นพืช · plants", value=True)
+        lo, hi = RANGES[var]
+        fig = tw.figure_3d(var=var, st=state, cmin=lo, cmax=hi, height=620, title_prefix="LIVE ", public=not extended)
+        if show_plants:
+            try:
+                fig.add_traces(plant_meshes(int(time.time() // 600), str(pd.Timestamp.now(tz=TZ).date())))
+                for t in fig.data:   # temperature boxes over the rack: fainter, so the plants inside show through
+                    if t.type == "mesh3d" and t.opacity == 0.55:
+                        t.opacity = 0.15
+                fig.update_layout(legend=dict(orientation="h", yanchor="top", y=-0.02, xanchor="left", x=0, font=dict(size=11)),
+                                  margin=dict(b=90))
+            except Exception as e:
+                st.caption(f"plants unavailable ({str(e)[:100]})")
+        st.plotly_chart(fig, **PLOTLY, key=f"live3d_{var}_{show_plants}")
+        if show_plants:
+            st.caption("ต้นพืชวาดตามบันทึกรอบปลูก หนึ่งต้นต่อหลุม ทรงใบตามชนิดผัก ขนาดตามจำนวนวันบนชั้นปลูกเทียบกับวันที่วางแผนไว้ (ภาพประกอบ ไม่ใช่ขนาดที่วัดจริง)")
+
+    twin_view()
+
+    @st.fragment(run_every="60s" if auto else None)
+    def live_view():
+        # ---- latest state (status line, cards)
+        state, table = current_state()
         ages = table.groupby("device")["age"].min().to_dict() if table is not None else None
         row = table["value"] if table is not None else tw.data.loc[state.time]
         now = pd.Timestamp.now(tz=TZ)
         stale = [f"{d} {age_text(a)}" for d, a in (ages or {}).items() if a > pd.Timedelta("30min") and not device_note(d, now - a)]
         st.caption(f"**{state.time:%Y-%m-%d %H:%M:%S}** Asia/Bangkok · " + " · ".join(f"{d} {device_note(d, now - a) or age_text(a) + ' ago'}" for d, a in (ages or {}).items())
                    + (f" · ⚠ stale: {', '.join(stale)}" if stale else ""))
-
-        # ---- the twin itself
-        st.markdown("#### 3-D twin — coloured by the latest readings")
-        var = colour_picker("var_live"); lo, hi = RANGES[var]
-        st.plotly_chart(tw.figure_3d(var=var, st=state, cmin=lo, cmax=hi, height=620, title_prefix="LIVE ", public=not extended), **PLOTLY, key=f"live3d_{var}")
 
         # ---- charts (same window and 5-min averaging as the ThingsBoard dashboard)
         try:
