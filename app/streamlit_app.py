@@ -26,7 +26,7 @@ sys.path.insert(0, str(ROOT))
 import os  # noqa: E402
 os.environ["PYTHONPATH"] = str(ROOT) + os.pathsep + os.environ.get("PYTHONPATH", "")
 NEEDS_PKG = "2026.11.11.4"
-APP_BUILD = "2026-11-11 j"          # shown in the footer so everyone can tell which version is running
+APP_BUILD = "2026-11-11 k"          # shown in the footer so everyone can tell which version is running
 import pfal_twin  # noqa: E402
 if getattr(pfal_twin, "__version__", "") != NEEDS_PKG:
     for _m in [m for m in sys.modules if m == "pfal_twin" or m.startswith("pfal_twin.")]:
@@ -525,7 +525,6 @@ elif page == "Dashboard":
         components.html("""
 <div style="display:flex;gap:8px;justify-content:flex-start;align-items:center;font:13px 'IBM Plex Sans Thai',sans-serif">
   <button id="fs" style="font:inherit;padding:4px 12px;border:1px solid #e3dfd4;border-radius:8px;background:#fff;cursor:pointer">⛶ เต็มจอ · full screen</button>
-  <a href="/" target="_top" style="color:#6b665c">ออกจากโหมดจอ</a>
   <span id="hint" style="color:#6b665c"></span>
 </div>
 <script>
@@ -540,6 +539,13 @@ function fit() {            // the 1920-px layout itself comes from the page CSS
   bc.style.setProperty('margin-left', Math.max(0, (w - W0 * k) / 2) + 'px', 'important');
 }
 P.addEventListener('resize', fit); setInterval(fit, 1500); fit();
+// leaving the dashboard (the exit button switches page and removes this frame): undo the scaling, leave full screen
+window.addEventListener('pagehide', () => {
+  const bc = D.querySelector('.block-container');
+  if (bc) { bc.style.removeProperty('transform'); bc.style.removeProperty('margin-left'); }
+  P.removeEventListener('resize', fit);
+  if (D.fullscreenElement) D.exitFullscreen().catch(() => {});
+});
 const btn = document.getElementById('fs'), hint = document.getElementById('hint');
 function label() { btn.textContent = D.fullscreenElement ? '⤢ ออกจากเต็มจอ' : '⛶ เต็มจอ · full screen'; }
 D.addEventListener('fullscreenchange', () => { label(); setTimeout(fit, 200); });
@@ -624,7 +630,11 @@ btn.onclick = async () => {
             dev = " · ".join(f"{d} {gone.get(d) or age_text(a) + ' ago'}" for d, a in ages.items())
             st.markdown(f"<div class='tv-status'><span>อัปเดต {state.time:%d %b %Y %H:%M} · {dev}</span></div>", unsafe_allow_html=True)
         dash_numbers()
-    tv_controls()
+    c_fs, c_exit, _ = st.columns([1.2, 1.2, 9.6])
+    with c_fs:
+        tv_controls()
+    if c_exit.button("ออกจากโหมดจอ", type="tertiary", key="tv_exit"):
+        st.switch_page(_SITE)
     st.stop()   # no footer: the screen ends here
 
 elif page == "Live":
