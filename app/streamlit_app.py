@@ -26,7 +26,7 @@ sys.path.insert(0, str(ROOT))
 import os  # noqa: E402
 os.environ["PYTHONPATH"] = str(ROOT) + os.pathsep + os.environ.get("PYTHONPATH", "")
 NEEDS_PKG = "2026.11.11.4"
-APP_BUILD = "2026-11-11 i"          # shown in the footer so everyone can tell which version is running
+APP_BUILD = "2026-11-11 j"          # shown in the footer so everyone can tell which version is running
 import pfal_twin  # noqa: E402
 if getattr(pfal_twin, "__version__", "") != NEEDS_PKG:
     for _m in [m for m in sys.modules if m == "pfal_twin" or m.startswith("pfal_twin.")]:
@@ -523,10 +523,10 @@ elif page == "Dashboard":
         narrower screens (phones) get the normal stacked layout. Runs in a component iframe and acts on the app page."""
         import streamlit.components.v1 as components
         components.html("""
-<div style="display:flex;gap:8px;justify-content:flex-end;align-items:center;font:13px 'IBM Plex Sans Thai',sans-serif">
-  <span id="hint" style="color:#6b665c"></span>
+<div style="display:flex;gap:8px;justify-content:flex-start;align-items:center;font:13px 'IBM Plex Sans Thai',sans-serif">
   <button id="fs" style="font:inherit;padding:4px 12px;border:1px solid #e3dfd4;border-radius:8px;background:#fff;cursor:pointer">⛶ เต็มจอ · full screen</button>
   <a href="/" target="_top" style="color:#6b665c">ออกจากโหมดจอ</a>
+  <span id="hint" style="color:#6b665c"></span>
 </div>
 <script>
 const P = window.parent, D = P.document, W0 = 1920, H0 = 1080;
