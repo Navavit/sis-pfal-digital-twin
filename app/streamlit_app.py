@@ -25,8 +25,8 @@ sys.path.insert(0, str(ROOT))
 # is already loaded (version mismatch), drop it and re-import.
 import os  # noqa: E402
 os.environ["PYTHONPATH"] = str(ROOT) + os.pathsep + os.environ.get("PYTHONPATH", "")
-NEEDS_PKG = "2026.11.11.4"
-APP_BUILD = "2026-11-11 o"          # shown in the footer so everyone can tell which version is running
+NEEDS_PKG = "2026.11.13.1"
+APP_BUILD = "2026-11-13 a"          # shown in the footer so everyone can tell which version is running
 import pfal_twin  # noqa: E402
 if getattr(pfal_twin, "__version__", "") != NEEDS_PKG:
     for _m in [m for m in sys.modules if m == "pfal_twin" or m.startswith("pfal_twin.")]:
@@ -272,6 +272,40 @@ def plant_meshes(_nonce: int, day: str) -> list:
     """3-D plants of tiers 2-5 for `day` (one mesh per crop), rebuilt when the planting sheet is re-read."""
     holes = M.hole_positions(tw.model, M.HoleLayout())
     return plants3d.plant_traces(plants3d.plant_table(planting_rounds(_nonce), holes, day))
+
+
+@st.cache_resource(ttl=60, show_spinner=False, max_entries=1)
+def meter_now(_nonce: int) -> dict:
+    """Electricity meter right now (Tuya), read at most once a minute for all viewers."""
+    from pfal_twin import tuya_meter as TM
+    return dict(TM.TuyaMeter.from_store().read(), _t=pd.Timestamp.now(tz=TZ))
+
+
+@st.cache_data(ttl=600, show_spinner=False, max_entries=2)
+def meter_history(_nonce: int, days: int = 120) -> pd.DataFrame:
+    """Meter readings stored in the database (one per data update, scripts/read_meter.py)."""
+    from pfal_twin import dbstore
+    from pfal_twin.sqlapi import SqlApi
+    return dbstore.pull_device(SqlApi.from_secrets(), "pm", ["energy", "power", "power_a", "power_b", "power_c"],
+                               since=pd.Timestamp.now(tz=TZ) - pd.Timedelta(days=days))
+
+
+def electricity() -> dict | None:
+    """Power now (kW, per phase), energy today (kWh) and its estimated cost; None when the meter cannot be read."""
+    from pfal_twin import tuya_meter as TM
+    try:
+        now = meter_now(int(time.time() // 60))
+    except Exception:
+        return None
+    try:
+        hist = meter_history(int(time.time() // 600))
+    except Exception:
+        hist = pd.DataFrame(columns=["energy"])
+    days = TM.daily_energy(hist["energy"], now.get("energy"), now["_t"])
+    today = now["_t"].normalize()
+    kwh = float(days[today]) if today in days.index else float("nan")
+    return dict(kw=now.get("power", float("nan")) / 1000, phases={p: now.get(f"power_{p}", float("nan")) / 1000 for p in "abc"},
+                today_kwh=kwh, today_thb=kwh * tw.params.thb_per_kwh, counter=now.get("energy"), t=now["_t"], daily=days)
 
 
 def add_plants(fig) -> bool:
@@ -680,6 +714,14 @@ btn.onclick = async () => {
             used = int((grid.n > 0).sum()); trays_v, trays_s = f"{used}<small>/ {len(grid)} ถาด</small>", f"{used * planting.HOLES_PER_TRAY} ต้น บนชั้น 2–5"
         except Exception:
             trays_v, trays_s = "—", "ไม่มีข้อมูลรอบปลูก"
+        el = electricity()
+        pump = "ทำงาน" if state.pump_on["gc1"] else "หยุด"
+        if el is not None:      # electricity meter: power now, energy and cost today; LED / pump state in the small line
+            today = f"วันนี้ {el['today_kwh']:.1f} kWh · ≈ {el['today_thb']:,.0f} บาท" if el["today_kwh"] == el["today_kwh"] else "วันนี้ — kWh"
+            power_tile = tile("ไฟฟ้า · electricity", fmt(el["kw"], 2), "kW", f"{today} · LED {led} · ปั๊ม{pump}", LIGHT)
+        else:
+            power_tile = tile("ไฟ LED · ปั๊มน้ำ", f"{led}<small>ไฟ</small> · {pump}", "",
+                              f"วันปลูกที่ {fmt(state.plant_day['growing (gc1)'], 0)} ตามตัวควบคุม", LIGHT, None, off("gc1"))
         st.markdown(group("น้ำ ปุ๋ย และไฟ · WATER & LIGHT", WATER) +
                     tile("EC ชั้นปลูก · growing", fmt(ecg, 2), "mS/cm", f"ค่าตั้ง {fmt(ecg_sp, 2)}", WATER,
                          ecg == ecg and ecg_sp == ecg_sp and abs(ecg - ecg_sp) <= LIM["EC_tol"], off("gc1")) +
@@ -688,8 +730,7 @@ btn.onclick = async () => {
                     tile("ชั้นอนุบาล · EC / pH", f"{fmt(ecn, 2)}<small>mS/cm</small> · {fmt(phn, 2)}", "",
                          f"ค่าตั้ง {fmt(ecn_sp, 2)} / {fmt(g('gc2.pHSetPoint'), 2)}", WATER,
                          ecn == ecn and phn == phn and abs(ecn - ecn_sp) <= LIM["EC_tol"] and LIM["pH_lo"] <= phn <= LIM["pH_hi"], off("gc2")) +
-                    tile("ไฟ LED · ปั๊มน้ำ", f"{led}<small>ไฟ</small> · {'ทำงาน' if state.pump_on['gc1'] else 'หยุด'}", "",
-                         f"วันปลูกที่ {fmt(state.plant_day['growing (gc1)'], 0)} ตามตัวควบคุม", LIGHT, None, off("gc1")) +
+                    power_tile +
                     tile("ต้นพืชตอนนี้ · plants", trays_v, "", trays_s, LIGHT),
                     unsafe_allow_html=True)
         if not R.empty:
@@ -785,6 +826,17 @@ elif page == "Live":
         st.caption(f"**{state.time:%Y-%m-%d %H:%M:%S}** Asia/Bangkok · " + " · ".join(f"{d} {device_note(d, now - a) or age_text(a) + ' ago'}" for d, a in (ages or {}).items())
                    + (f" · ⚠ stale: {', '.join(stale)}" if stale else ""))
 
+        # ---- electricity meter (Tuya, 3-phase): power now and energy today
+        el = electricity()
+        if el is not None:
+            c = st.columns(5)
+            c[0].metric("ไฟฟ้าตอนนี้ · power now", fmt(el["kw"], 2, " kW"))
+            for i, ph in enumerate("abc"):
+                c[1 + i].metric(f"เฟส {ph.upper()} · phase {ph.upper()}", fmt(el["phases"][ph], 2, " kW"))
+            c[4].metric("วันนี้ · today", fmt(el["today_kwh"], 1, " kWh"),
+                        f"≈ {el['today_thb']:,.0f} บาท ({tw.params.thb_per_kwh:g} บาท/kWh)" if el["today_kwh"] == el["today_kwh"] else None,
+                        delta_color="off")
+
         # ---- charts (same window and 5-min averaging as the ThingsBoard dashboard)
         try:
             R = recent_window(hours, int(time.time() // 60))
@@ -835,6 +887,22 @@ elif page == "History":
                 f"Shown from {pd.Timestamp(HISTORY_START):%d %b %Y} (start of continuous operation; earlier commissioning samples are in the full store — download below). "
                 "Store (SIS PFAL SQL database) refreshed every 30 min + topped up from ThingsBoard every 10 min; grey days below = the device sent nothing that day.")
     st.plotly_chart(availability_figure(STORE_VERSION), use_container_width=True, key="availability")
+    with st.container(border=True):
+        st.markdown("**ไฟฟ้า · electricity (kWh ต่อวัน จากมิเตอร์ 3 เฟสของห้อง)**")
+        el = electricity()
+        days = el["daily"] if el is not None else pd.Series(dtype=float)
+        if len(days) == 0:
+            st.caption("ยังมีข้อมูลมิเตอร์ไม่พอ: บันทึกทุกรอบที่อัปเดตข้อมูลตั้งแต่ 13 พ.ย. 2026 กราฟจะขึ้นเมื่อมีค่าอย่างน้อย 2 ครั้ง")
+        else:
+            import plotly.graph_objects as go
+            rate = tw.params.thb_per_kwh
+            figE = go.Figure(go.Bar(x=days.index, y=days.values, marker_color="#c98a1b",
+                                    hovertemplate="%{x|%d %b %Y}: %{y:.1f} kWh<extra></extra>"))
+            figE.update_layout(height=260, margin=dict(l=45, r=10, t=10, b=30), yaxis_title="kWh/day", bargap=0.25)
+            st.plotly_chart(figE, use_container_width=True, key="kwh_daily")
+            full = days.iloc[:-1] if len(days) > 1 else days          # the last day is today: not complete yet
+            st.caption(f"เฉลี่ย {full.mean():.1f} kWh/วัน (≈ {full.mean() * rate:,.0f} บาท/วัน ที่ {rate:g} บาท/kWh) · รวม {days.sum():.0f} kWh · "
+                       "วันนี้นับถึงตอนนี้ · ค่าที่เที่ยงคืนประมาณจากการอ่านสองครั้งรอบเวลานั้น (มิเตอร์อ่านทุกรอบอัปเดตข้อมูล)")
     with st.expander("⬇ download the whole store · ดาวน์โหลดข้อมูลทั้งหมด"):
         st.markdown("Columns are `device.key` (e.g. `gw.xy_md_21_t` = temperature of XY-MD02 unit 21, `gc1.ec` = EC of the growing-stage controller); "
                     "time index is Asia/Bangkok; the data dictionary explains every column. "

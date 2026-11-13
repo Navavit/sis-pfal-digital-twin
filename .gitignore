@@ -25,6 +25,7 @@ figures/html/
 
 # --- manuscript drafts stay private until submission
 paper/
+PFAL_Imaging_Robot/
 
 # --- research pipeline stays local: the public repo is the web app + data (paper cites it as code/model/data store)
 notebooks/
@@ -33,3 +34,4 @@ scripts/make_notebooks.py
 scripts/photos_to_jpg.sh
 docs/*
 !docs/DATA_DICTIONARY.md
+.streamlit/tuya_token.json
