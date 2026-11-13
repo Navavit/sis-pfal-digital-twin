@@ -61,3 +61,14 @@ jobs:
           PFAL_DB_USER: ${{ secrets.PFAL_DB_USER }}
           PFAL_DB_PASS: ${{ secrets.PFAL_DB_PASS }}
         run: python scripts/publish_db.py
+
+      # Electricity meter (Tuya, not in ThingsBoard): one reading per run into the database. Its energy counter only
+      # grows, so daily kWh stays complete however far apart the runs are. A meter / Tuya failure must not fail the run.
+      - name: Read the electricity meter
+        continue-on-error: true
+        env:
+          PFAL_DB_USER: ${{ secrets.PFAL_DB_USER }}
+          PFAL_DB_PASS: ${{ secrets.PFAL_DB_PASS }}
+          TUYA_USER_CODE: ${{ secrets.TUYA_USER_CODE }}
+          TUYA_DEVICE_ID: ${{ secrets.TUYA_DEVICE_ID }}
+        run: python scripts/read_meter.py

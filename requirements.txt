@@ -9,3 +9,6 @@ pyarrow~=21.0
 requests~=2.32
 Pillow~=11.3
 streamlit~=1.50
+# electricity meter (Tuya device-sharing API, the one Home Assistant uses; it needs cryptography but does not declare it)
+tuya-device-sharing-sdk~=0.2.15
+cryptography>=42

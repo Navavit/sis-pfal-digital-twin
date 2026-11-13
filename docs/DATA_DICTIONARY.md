@@ -12,6 +12,23 @@ Coverage in this build: 2025-12-26 → 2026-09-15, 37,805 bins, 95 columns.
 | `gc1` | Grow Controller Plus at the rack END — growing-stage loop, 200 L tank, tiers 2–5 |
 | `gc2` | Grow Controller Plus at the rack SIDE — nursery-2 dosing set, 100 L tank |
 | `co2` | CO₂ & environment controller |
+| `pm` | 3-phase smart breaker / electricity meter on the PFAL supply (Tuya, from 13 Nov 2026) — **not in ThingsBoard**: raw samples only (`iot_long`, device `pm`), one reading per data update, see below |
+
+## Electricity meter `pm` (database table `iot_long`, not in the 10-min table)
+
+Read by `scripts/read_meter.py` at every data update (GitHub Actions) through the Tuya device-sharing API (`pfal_twin/tuya_meter.py`); the web app also reads it live once a minute.
+
+| metric | meaning |
+|---|---|
+| `power` | total active power, sum of the three phases (W) |
+| `power_a`, `power_b`, `power_c` | active power per phase (W) |
+| `voltage_a`, `voltage_b`, `voltage_c` | phase-to-neutral voltage (V) |
+| `current_a`, `current_b`, `current_c` | phase current (A) |
+| `energy` | energy counter, total forward energy (kWh; the meter counts 0.01 kWh) — only grows, so kWh per day = difference at midnight, interpolated between the readings around it |
+| `temp` | breaker temperature (°C) |
+| `leakage` | leakage current reported by the breaker |
+| `fault` | fault code (0 = none) |
+| `switch` | breaker closed = 1, open = 0 |
 
 ## Columns
 

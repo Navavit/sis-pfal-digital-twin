@@ -163,6 +163,11 @@ def publish(db: SqlApi, long: pd.DataFrame, wide: pd.DataFrame, manifest: dict, 
                 wide=dict(since=fmt(since["wide"]), affected=n.get("wide", 0), deleted_after_end=n.get("deleted", 0)))
 
 
+def insert_long(db: SqlApi, long: pd.DataFrame) -> int:
+    """Add raw samples (ts, device, key, value) to iot_long - e.g. the electricity meter, which is not in ThingsBoard."""
+    return _run_packed(db, [("long", s) for s in long_statements(long)]).get("long", 0)
+
+
 # --------------------------------------------------------------------------- read (web app)
 
 def remote_manifest(db: SqlApi) -> dict | None:
@@ -191,6 +196,20 @@ def pull_wide(db: SqlApi, since=None, page_rows: int = 5000) -> pd.DataFrame:
     df = df.apply(pd.to_numeric, errors="coerce").astype(float)  # the API returns numbers as strings
     df.columns = [app_col(c) for c in df.columns]
     return df
+
+
+def pull_device(db: SqlApi, device: str, metrics: list[str], since=None) -> pd.DataFrame:
+    """Raw samples of one device as a wide table (index ts, one column per metric), from `since` on."""
+    lo = "1970-01-01 00:00:00" if since is None else _ts_sql(pd.DatetimeIndex([since]), ms=False)[0]
+    keys = ", ".join(f"'{m}'" for m in metrics)
+    rows = db.select(f"SELECT ts, metric, value FROM {LONG_T} WHERE device = '{device}' AND metric IN ({keys}) "
+                     f"AND ts >= '{lo}' ORDER BY ts")
+    if not rows:
+        return pd.DataFrame(columns=metrics, index=pd.DatetimeIndex([], tz=TZ), dtype=float)
+    df = pd.DataFrame(rows)
+    df["ts"] = pd.to_datetime(df["ts"]).dt.tz_localize(TZ)
+    df["value"] = pd.to_numeric(df["value"], errors="coerce")
+    return df.pivot_table(index="ts", columns="metric", values="value", aggfunc="last").reindex(columns=metrics)
 
 
 def pull_long(db: SqlApi, since=None, window: str = "2D") -> pd.DataFrame:
