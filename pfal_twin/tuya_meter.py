@@ -36,6 +36,12 @@ TOKEN_ROW = "tuya_token"
 DEVICE = "pm"                     # device name of the meter in the database
 TZ = "Asia/Bangkok"
 ENERGY_PER_COUNT = 0.01           # kWh per count of total_forward_energy
+METRICS = ["power", "power_a", "power_b", "power_c", "voltage_a", "voltage_b", "voltage_c", "current_a", "current_b",
+           "current_c", "energy", "temp", "leakage", "fault", "switch"]
+# Backup of the readings for servers the database refuses (Streamlit Cloud): branch `meter`, one file, force-pushed
+# by the collector every hour (like the `data` branch for the sensors).
+BACKUP_FILE = "pm.parquet"
+BACKUP_URL = f"https://raw.githubusercontent.com/Navavit/sis-pfal-digital-twin/meter/{BACKUP_FILE}"
 # What each phase feeds (PFAL panel, breaker numbers; team, 17 Nov 2026). Breakers 19/21/23 only feed the meter's voltage
 # inputs (V1-V3); its CTs read the whole panel (the LED circuit 22 and the AC on 18/20 show up in its phases).
 PHASES = {"a": dict(line="L1", colour="น้ำตาล", short="ปลั๊ก + แอร์ 1", loads="ปลั๊กไฟในห้อง (2) + แอร์ (20)"),
@@ -195,3 +201,24 @@ def daily_energy(samples: pd.Series, now_kwh: float | None = None, now: pd.Times
     out = at.diff().shift(-1).dropna()
     return out[out >= 0]
 
+
+
+def phase_daily_energy(hist: pd.DataFrame, daily: pd.Series | None = None, max_gap_s: int = 1800) -> pd.DataFrame:
+    """kWh per day and phase (columns a, b, c). The meter counts energy only in total, so each phase's power is
+    integrated over the day (each reading held until the next, at most `max_gap_s`) and the counter's kWh of that day
+    (`daily`, from daily_energy) is split in those proportions - the phases then add up to the counter exactly. A day
+    without a counter value keeps the integrated kWh."""
+    cols = [f"power_{p}" for p in "abc"]
+    p = hist.reindex(columns=cols).dropna(how="all").sort_index()
+    if p.empty:
+        return pd.DataFrame(columns=list("abc"), dtype=float)
+    dt = p.index.to_series().diff().shift(-1).dt.total_seconds().clip(upper=max_gap_s).fillna(0)
+    e = p.fillna(0).mul(dt, axis=0) / 3.6e6
+    per_day = e.groupby(e.index.normalize()).sum()
+    per_day.columns = list("abc")
+    per_day = per_day[per_day.sum(axis=1) > 0]
+    if daily is None or daily.empty:
+        return per_day
+    share = per_day.div(per_day.sum(axis=1), axis=0)
+    scaled = share.mul(daily.reindex(per_day.index), axis=0)
+    return scaled.where(scaled.notna(), per_day)

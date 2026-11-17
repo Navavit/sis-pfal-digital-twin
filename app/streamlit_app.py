@@ -25,8 +25,8 @@ sys.path.insert(0, str(ROOT))
 # is already loaded (version mismatch), drop it and re-import.
 import os  # noqa: E402
 os.environ["PYTHONPATH"] = str(ROOT) + os.pathsep + os.environ.get("PYTHONPATH", "")
-NEEDS_PKG = "2026.11.17.2"
-APP_BUILD = "2026-11-17 b"          # shown in the footer so everyone can tell which version is running
+NEEDS_PKG = "2026.11.17.3"
+APP_BUILD = "2026-11-17 c"          # shown in the footer so everyone can tell which version is running
 import pfal_twin  # noqa: E402
 if getattr(pfal_twin, "__version__", "") != NEEDS_PKG:
     for _m in [m for m in sys.modules if m == "pfal_twin" or m.startswith("pfal_twin.")]:
@@ -278,10 +278,18 @@ def plant_meshes(_nonce: int, day: str) -> list:
 def meter_history(_nonce: int, days: int = 120) -> pd.DataFrame:
     """Meter readings in the database, stored every 10 min by the collector (scripts/collector.py). The web app does
     not read the meter itself: the Tuya login must have a single owner, or token renewals clash."""
-    from pfal_twin import dbstore
+    from pfal_twin import dbstore, tuya_meter as TM
     from pfal_twin.sqlapi import SqlApi
-    return dbstore.pull_device(SqlApi.from_secrets(), "pm", ["energy", "power", "power_a", "power_b", "power_c"],
-                               since=pd.Timestamp.now(tz=TZ) - pd.Timedelta(days=days))
+    since = pd.Timestamp.now(tz=TZ) - pd.Timedelta(days=days)
+    try:
+        return dbstore.pull_device(SqlApi.from_secrets(), "pm", ["energy", "power", "power_a", "power_b", "power_c"], since=since)
+    except Exception:              # database unreachable from here: the hourly copy on branch `meter`
+        import io
+        import requests
+        r = requests.get(TM.BACKUP_URL, timeout=30)
+        r.raise_for_status()
+        df = pd.read_parquet(io.BytesIO(r.content))
+        return df[df.index >= since]
 
 
 METER_STALE = pd.Timedelta("30min")
@@ -304,7 +312,8 @@ def electricity() -> dict | None:
     today = now.normalize()
     kwh = float(days[today]) if today in days.index else float("nan")
     return dict(kw=r["power"] / 1000, phases={p: r[f"power_{p}"] / 1000 for p in "abc"}, today_kwh=kwh,
-                today_thb=kwh * tw.params.thb_per_kwh, counter=r["energy"], t=t, age=now - t, stale=now - t > METER_STALE, daily=days)
+                today_thb=kwh * tw.params.thb_per_kwh, counter=r["energy"], t=t, age=now - t, stale=now - t > METER_STALE, daily=days,
+                hist=hist)
 
 
 def meter_warning(el: dict | None) -> str | None:
@@ -940,21 +949,37 @@ elif page == "History":
                 "Store (SIS PFAL SQL database) refreshed every 30 min + topped up from ThingsBoard every 10 min; grey days below = the device sent nothing that day.")
     st.plotly_chart(availability_figure(STORE_VERSION), use_container_width=True, key="availability")
     with st.container(border=True):
-        st.markdown("**ไฟฟ้า · electricity (kWh ต่อวัน จากมิเตอร์ 3 เฟสของห้อง)**")
+        st.markdown("**ไฟฟ้า · electricity: kWh ต่อวัน แยกตามประเภท (มิเตอร์ 3 เฟสของห้อง)**")
         el = electricity()
         days = el["daily"] if el is not None else pd.Series(dtype=float)
         if len(days) == 0:
-            st.caption("ยังมีข้อมูลมิเตอร์ไม่พอ: บันทึกทุกรอบที่อัปเดตข้อมูลตั้งแต่ 13 พ.ย. 2026 กราฟจะขึ้นเมื่อมีค่าอย่างน้อย 2 ครั้ง")
+            st.caption("ยังมีข้อมูลมิเตอร์ไม่พอ: กราฟจะขึ้นเมื่อมีค่าอย่างน้อย 2 ครั้ง (ตัวเก็บข้อมูลอ่านทุก 10 นาที)")
         else:
             import plotly.graph_objects as go
+            from pfal_twin import tuya_meter as TM
             rate = tw.params.thb_per_kwh
-            figE = go.Figure(go.Bar(x=days.index, y=days.values, marker_color="#c98a1b",
-                                    hovertemplate="%{x|%d %b %Y}: %{y:.1f} kWh<extra></extra>"))
-            figE.update_layout(height=260, margin=dict(l=45, r=10, t=10, b=30), yaxis_title="kWh/day", bargap=0.25)
+            ph = TM.phase_daily_energy(el["hist"], days)
+            colours = {"b": "#c98a1b", "a": "#2f6fa3", "c": "#1f6b67"}            # LED amber, sockets + AC blue, room + AC teal
+            figE = go.Figure()
+            for k in ("b", "a", "c"):
+                if k in ph and ph[k].notna().any():
+                    figE.add_bar(x=ph.index, y=ph[k], name=f"{TM.PHASES[k]['short']} ({TM.PHASES[k]['line']})", marker_color=colours[k],
+                                 hovertemplate="%{x|%d %b}: %{y:.1f} kWh<extra>" + TM.PHASES[k]["loads"] + "</extra>")
+            rest = days.drop(ph.index, errors="ignore")                         # days before the per-phase readings
+            if len(rest):
+                figE.add_bar(x=rest.index, y=rest.values, name="รวม (ยังไม่แยกประเภท)", marker_color="#b9b3a6",
+                             hovertemplate="%{x|%d %b}: %{y:.1f} kWh<extra>รวม</extra>")
+            figE.update_layout(barmode="stack", height=300, margin=dict(l=45, r=10, t=10, b=30), yaxis_title="kWh/day", bargap=0.25,
+                               legend=dict(orientation="h", y=1.02, yanchor="bottom", x=0))
             st.plotly_chart(figE, use_container_width=True, key="kwh_daily")
             full = days.iloc[:-1] if len(days) > 1 else days          # the last day is today: not complete yet
-            st.caption(f"เฉลี่ย {full.mean():.1f} kWh/วัน (≈ {full.mean() * rate:,.0f} บาท/วัน ที่ {rate:g} บาท/kWh) · รวม {days.sum():.0f} kWh · "
-                       "วันนี้นับถึงตอนนี้ · ค่าที่เที่ยงคืนประมาณจากการอ่านสองครั้งรอบเวลานั้น (มิเตอร์อ่านทุกรอบอัปเดตข้อมูล)")
+            share = ph.sum() / ph.sum().sum() if len(ph) and ph.sum().sum() > 0 else None
+            split = (" · สัดส่วน: " + ", ".join(f"{TM.PHASES[k]['short']} {share[k]:.0%}" for k in ("b", "a", "c"))) if share is not None else ""
+            head = (f"เฉลี่ย {full.mean():.1f} kWh/วัน (≈ {full.mean() * rate:,.0f} บาท/วัน ที่ {rate:g} บาท/kWh) จาก {len(full)} วันที่ครบ"
+                    if len(days) > 1 else f"วันแรกที่เก็บ: วันนี้ถึงตอนนี้ {days.iloc[-1]:.1f} kWh (≈ {days.iloc[-1] * rate:,.0f} บาท ที่ {rate:g} บาท/kWh)")
+            st.caption(f"{head} · รวม {days.sum():.0f} kWh{split} · "
+                       "วันนี้นับถึงตอนนี้ · kWh รวมจากตัวนับของมิเตอร์ แบ่งตามสัดส่วนกำลังไฟของแต่ละเฟส (อ่านทุก 10 นาที) · "
+                       "L1 = ปลั๊ก (2) + แอร์ (20), L2 = LED ชั้นปลูก (22), L3 = ไฟห้อง (1) + แอร์ (18)")
     with st.expander("⬇ download the whole store · ดาวน์โหลดข้อมูลทั้งหมด"):
         st.markdown("Columns are `device.key` (e.g. `gw.xy_md_21_t` = temperature of XY-MD02 unit 21, `gc1.ec` = EC of the growing-stage controller); "
                     "time index is Asia/Bangkok; the data dictionary explains every column. "

@@ -3,7 +3,8 @@ since the outage of 12 Nov 2026; it answers from Thai networks).
 
 Every 10 min: renew the Tuya token ahead of time and store one electricity-meter reading (device "pm") in the database.
 Every hour:   pull new ThingsBoard telemetry into the local store and publish it to the database (update_store.py +
-              publish_db.py, the same steps GitHub Actions runs).
+              publish_db.py, the same steps GitHub Actions runs), and copy the meter readings to branch `meter` on
+              GitHub for the web app on Streamlit Cloud, which the database refuses.
 A reading that cannot reach the database waits in data/raw/meter/pending.jsonl and goes in with the next one.
 
 Runs under launchd (scripts/install_collector.sh); by hand:  .venv/bin/python scripts/collector.py [--once]
@@ -77,6 +78,23 @@ def store_once():
             break
 
 
+def publish_meter_backup(db: SqlApi, days: int = 120):
+    """Meter readings of the last `days` -> pm.parquet on branch `meter` (one commit, force-pushed: the repository does
+    not grow)."""
+    import tempfile
+    df = dbstore.pull_device(db, T.DEVICE, T.METRICS, since=pd.Timestamp.now(tz=T.TZ) - pd.Timedelta(days=days))
+    url = subprocess.run(["git", "remote", "get-url", "origin"], cwd=ROOT, capture_output=True, text=True).stdout.strip()
+    with tempfile.TemporaryDirectory() as tmp:
+        df.to_parquet(Path(tmp) / T.BACKUP_FILE)
+        git = lambda *a: subprocess.run(["git", *a], cwd=tmp, capture_output=True, text=True, timeout=120)
+        git("init", "-q", "-b", "meter")
+        git("add", T.BACKUP_FILE)
+        git("-c", "user.name=sis-pfal-collector", "-c", "user.email=actions@users.noreply.github.com",
+            "commit", "-q", "-m", f"meter readings {pd.Timestamp.now(tz=T.TZ):%Y-%m-%d %H:%M}")
+        p = git("push", "-q", "--force", url, "meter")
+    log(f"meter backup: {len(df)} readings -> branch meter" if p.returncode == 0 else f"meter backup FAILED: {p.stderr.strip()[-160:]}")
+
+
 def main():
     LOCK.parent.mkdir(parents=True, exist_ok=True)
     lock = open(LOCK, "w")
@@ -95,6 +113,10 @@ def main():
         meter = meter_once(db, meter)
         if t0 >= next_store:
             store_once()
+            try:
+                publish_meter_backup(db)
+            except Exception as e:
+                log(f"meter backup: {str(e)[:120]}")
             next_store = t0 + STORE_EVERY
         if "--once" in sys.argv:
             return
