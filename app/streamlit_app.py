@@ -25,8 +25,8 @@ sys.path.insert(0, str(ROOT))
 # is already loaded (version mismatch), drop it and re-import.
 import os  # noqa: E402
 os.environ["PYTHONPATH"] = str(ROOT) + os.pathsep + os.environ.get("PYTHONPATH", "")
-NEEDS_PKG = "2026.11.17.3"
-APP_BUILD = "2026-11-17 c"          # shown in the footer so everyone can tell which version is running
+NEEDS_PKG = "2026.11.17.4"
+APP_BUILD = "2026-11-17 d"          # shown in the footer so everyone can tell which version is running
 import pfal_twin  # noqa: E402
 if getattr(pfal_twin, "__version__", "") != NEEDS_PKG:
     for _m in [m for m in sys.modules if m == "pfal_twin" or m.startswith("pfal_twin.")]:
@@ -979,7 +979,7 @@ elif page == "History":
                     if len(days) > 1 else f"วันแรกที่เก็บ: วันนี้ถึงตอนนี้ {days.iloc[-1]:.1f} kWh (≈ {days.iloc[-1] * rate:,.0f} บาท ที่ {rate:g} บาท/kWh)")
             st.caption(f"{head} · รวม {days.sum():.0f} kWh{split} · "
                        "วันนี้นับถึงตอนนี้ · kWh รวมจากตัวนับของมิเตอร์ แบ่งตามสัดส่วนกำลังไฟของแต่ละเฟส (อ่านทุก 10 นาที) · "
-                       "L1 = ปลั๊ก (2) + แอร์ (20), L2 = LED ชั้นปลูก (22), L3 = ไฟห้อง (1) + แอร์ (18)")
+                       "L1 = ปลั๊ก (2) + แอร์ตัวขวา (20), L2 = LED ชั้นปลูก (22), L3 = ไฟห้อง (1) + แอร์ตัวซ้าย (18) · ซ้าย/ขวาเมื่อหันหน้าเข้าหาแอร์")
     with st.expander("⬇ download the whole store · ดาวน์โหลดข้อมูลทั้งหมด"):
         st.markdown("Columns are `device.key` (e.g. `gw.xy_md_21_t` = temperature of XY-MD02 unit 21, `gc1.ec` = EC of the growing-stage controller); "
                     "time index is Asia/Bangkok; the data dictionary explains every column. "

@@ -44,9 +44,10 @@ BACKUP_FILE = "pm.parquet"
 BACKUP_URL = f"https://raw.githubusercontent.com/Navavit/sis-pfal-digital-twin/meter/{BACKUP_FILE}"
 # What each phase feeds (PFAL panel, breaker numbers; team, 17 Nov 2026). Breakers 19/21/23 only feed the meter's voltage
 # inputs (V1-V3); its CTs read the whole panel (the LED circuit 22 and the AC on 18/20 show up in its phases).
-PHASES = {"a": dict(line="L1", colour="น้ำตาล", short="ปลั๊ก + แอร์ 1", loads="ปลั๊กไฟในห้อง (2) + แอร์ (20)"),
+# Left / right = facing the two indoor AC units: with only the right one running, L1 read 1.3 kW and L3 ~0 (17 Nov).
+PHASES = {"a": dict(line="L1", colour="น้ำตาล", short="ปลั๊ก + แอร์ขวา", loads="ปลั๊กไฟในห้อง (2) + แอร์ตัวขวา (20)"),
           "b": dict(line="L2", colour="ดำ", short="LED ชั้นปลูก", loads="ไฟ LED ชั้นปลูก (22)"),
-          "c": dict(line="L3", colour="เทา", short="ไฟห้อง + แอร์ 2", loads="แสงสว่างในห้อง (1) + แอร์ (18)")}
+          "c": dict(line="L3", colour="เทา", short="ไฟห้อง + แอร์ซ้าย", loads="แสงสว่างในห้อง (1) + แอร์ตัวซ้าย (18)")}
 LOCAL_TOKEN = Path(__file__).resolve().parents[1] / ".streamlit" / "tuya_token.json"
 
 
