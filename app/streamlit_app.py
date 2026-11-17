@@ -26,7 +26,7 @@ sys.path.insert(0, str(ROOT))
 import os  # noqa: E402
 os.environ["PYTHONPATH"] = str(ROOT) + os.pathsep + os.environ.get("PYTHONPATH", "")
 NEEDS_PKG = "2026.11.17.6"
-APP_BUILD = "2026-11-17 j"          # shown in the footer so everyone can tell which version is running
+APP_BUILD = "2026-11-17 k"          # shown in the footer so everyone can tell which version is running
 import pfal_twin  # noqa: E402
 if getattr(pfal_twin, "__version__", "") != NEEDS_PKG:
     for _m in [m for m in sys.modules if m == "pfal_twin" or m.startswith("pfal_twin.")]:
@@ -1041,39 +1041,6 @@ elif page == "History":
                 f"Shown from {pd.Timestamp(HISTORY_START):%d %b %Y} (start of continuous operation; earlier commissioning samples are in the full store — download below). "
                 "Store (SIS PFAL SQL database) gets new data every hour + the app tops it up from ThingsBoard every 10 min; grey days below = the device sent nothing that day.")
     st.plotly_chart(availability_figure(STORE_VERSION), use_container_width=True, key="availability")
-    with st.container(border=True):
-        st.markdown("**ไฟฟ้า · electricity: kWh ต่อวัน แยกตามประเภท (มิเตอร์ 3 เฟสของห้อง)**")
-        el = electricity()
-        days = el["daily"] if el is not None else pd.Series(dtype=float)
-        if len(days) == 0:
-            st.caption("ยังมีข้อมูลมิเตอร์ไม่พอ: กราฟจะขึ้นเมื่อมีค่าอย่างน้อย 2 ครั้ง (ตัวเก็บข้อมูลอ่านทุก 10 นาที)")
-        else:
-            import plotly.graph_objects as go
-            from pfal_twin import tuya_meter as TM
-            rate = tw.params.thb_per_kwh
-            unit = st.radio("หน่วย · unit", ["kWh", "บาท"], horizontal=True, key="kwh_unit", label_visibility="collapsed")
-            f, u = (1.0, "kWh") if unit == "kWh" else (rate, "บาท")
-            ph = TM.phase_daily_energy(el["hist"], days)
-            figE = go.Figure()
-            for k in ("b", "a", "c"):
-                if k in ph and ph[k].notna().any():
-                    figE.add_bar(x=ph.index, y=ph[k] * f, name=f"{TM.PHASES[k]['line']} {TM.PHASES[k]['short']}",
-                                 hovertemplate="%{x|%d %b}: %{y:,.1f} " + u + "<extra>" + TM.PHASES[k]["loads"] + "</extra>")
-            rest = days.drop(ph.index, errors="ignore")                         # days before the per-phase readings
-            if len(rest):
-                figE.add_bar(x=rest.index, y=rest.values * f, name="รวม (ยังไม่แยกประเภท)", marker_color="#b9b3a6",
-                             hovertemplate="%{x|%d %b}: %{y:,.1f} " + u + "<extra>รวม</extra>")
-            figE.update_layout(title=f"Electricity per day ({u}, by phase)", barmode="stack", height=300, margin=dict(l=40, r=20, t=40, b=30),
-                               yaxis_title=f"{u}/วัน", bargap=0.25, legend=dict(orientation="h", y=-0.25), hovermode="x unified")
-            st.plotly_chart(figE, use_container_width=True, key="kwh_daily")
-            full = days.iloc[:-1] if len(days) > 1 else days          # the last day is today: not complete yet
-            share = ph.sum() / ph.sum().sum() if len(ph) and ph.sum().sum() > 0 else None
-            split = (" · สัดส่วน: " + ", ".join(f"{TM.PHASES[k]['short']} {share[k]:.0%}" for k in ("b", "a", "c"))) if share is not None else ""
-            head = (f"เฉลี่ย {full.mean():.1f} kWh/วัน (≈ {full.mean() * rate:,.0f} บาท/วัน ที่ {rate:g} บาท/kWh) จาก {len(full)} วันที่ครบ"
-                    if len(days) > 1 else f"วันแรกที่เก็บ: วันนี้ถึงตอนนี้ {days.iloc[-1]:.1f} kWh (≈ {days.iloc[-1] * rate:,.0f} บาท ที่ {rate:g} บาท/kWh)")
-            st.caption(f"{head} · รวม {days.sum():.0f} kWh{split} · "
-                       "วันนี้นับถึงตอนนี้ · kWh รวมจากตัวนับของมิเตอร์ แบ่งตามสัดส่วนกำลังไฟของแต่ละเฟส (อ่านทุก 10 นาที) · "
-                       "L1 = ปลั๊ก (2) + แอร์ตัวขวา (20), L2 = LED ชั้นปลูก (22), L3 = ไฟห้อง (1) + แอร์ตัวซ้าย (18) · ซ้าย/ขวาเมื่อหันหน้าเข้าหาแอร์")
     with st.expander("⬇ download the whole store · ดาวน์โหลดข้อมูลทั้งหมด"):
         st.markdown("Columns are `device.key` (e.g. `gw.xy_md_21_t` = temperature of XY-MD02 unit 21, `gc1.ec` = EC of the growing-stage controller); "
                     "time index is Asia/Bangkok; the data dictionary explains every column. "
@@ -1150,23 +1117,42 @@ elif page == "History":
         fig.add_vline(x=pd.Timestamp(pick), line_dash="dot", line_color="grey")
         fig.update_layout(title=g, height=300, margin=dict(l=40, r=20, t=40, b=30), legend=dict(orientation="h", y=-0.25), hovermode="x unified")
         st.plotly_chart(fig, use_container_width=True, key=f"ts_{g}")
+    # ---- electricity, over the same dates as the charts above (readings from 17 Nov 2026)
     el = electricity()
-    if el is not None:
-        t0 = pd.Timestamp(start).tz_localize(TZ); t1 = pd.Timestamp(end).tz_localize(TZ) + pd.Timedelta(days=1)
-        P = power_frame(el["hist"], t0, t1, freq)
-        if len(P):
-            figP = go.Figure()
-            for c in P.columns:
-                figP.add_scatter(x=P.index, y=P[c], mode="lines", name=c, connectgaps=False)
-            figP.add_vline(x=pd.Timestamp(pick), line_dash="dot", line_color="grey")
-            figP.update_layout(title="Electricity (kW, by phase and total)", height=300, margin=dict(l=40, r=20, t=40, b=30),
-                               legend=dict(orientation="h", y=-0.25), hovermode="x unified", yaxis_title="kW")
-            sel = el["daily"][(el["daily"].index >= t0) & (el["daily"].index < t1)]
-            st.plotly_chart(figP, use_container_width=True, key="ts_power_hist")
-            if len(sel):
-                st.caption(f"ช่วงที่เลือก: {sel.sum():.1f} kWh ≈ {sel.sum() * tw.params.thb_per_kwh:,.0f} บาท (ที่ {tw.params.thb_per_kwh:g} บาท/kWh)")
-        else:
-            st.caption("ไม่มีค่ามิเตอร์ไฟฟ้าในช่วงวันที่เลือก (เริ่มเก็บรายเฟส 17 พ.ย. 2026)")
+    t0 = pd.Timestamp(start).tz_localize(TZ); t1 = min(pd.Timestamp(end).tz_localize(TZ) + pd.Timedelta(days=1), pd.Timestamp.now(tz=TZ))
+    span = [t0, hist.index.max() if len(hist) else t1]                 # the x-range of the time series above
+    P = power_frame(el["hist"], t0, t1, freq) if el is not None else pd.DataFrame()
+    if len(P):
+        from pfal_twin import tuya_meter as TM
+        figP = go.Figure()
+        for c in P.columns:
+            figP.add_scatter(x=P.index, y=P[c], mode="lines", name=c, connectgaps=False)
+        figP.add_vline(x=pd.Timestamp(pick), line_dash="dot", line_color="grey")
+        figP.update_layout(title="Electricity (kW, by phase and total)", height=300, margin=dict(l=40, r=20, t=40, b=30),
+                           legend=dict(orientation="h", y=-0.25), hovermode="x unified", yaxis_title="kW", xaxis_range=span)
+        st.plotly_chart(figP, use_container_width=True, key="ts_power_hist")
+
+        days = el["daily"][(el["daily"].index >= t0.normalize()) & (el["daily"].index < t1)]
+        ph = TM.phase_daily_energy(el["hist"], el["daily"]).reindex(days.index)
+        rate = tw.params.thb_per_kwh
+        unit = st.radio("unit", ["kWh", "บาท"], horizontal=True, key="kwh_unit", label_visibility="collapsed")
+        f = 1.0 if unit == "kWh" else rate
+        figE = go.Figure()
+        for k in ("b", "a", "c"):
+            figE.add_bar(x=ph.index + pd.Timedelta("12h"), y=ph[k] * f, name=f"{TM.PHASES[k]['line']} {TM.PHASES[k]['short']}",
+                         width=0.7 * 86_400_000,                      # ms: a bar is 0.7 day wide whatever the number of days
+                         hovertemplate="%{y:,.1f} " + unit + "<extra>" + TM.PHASES[k]["loads"] + "</extra>")
+        figE.update_layout(title=f"Electricity per day ({unit}, by phase)", barmode="stack", height=300, margin=dict(l=40, r=20, t=40, b=30),
+                           legend=dict(orientation="h", y=-0.25), hovermode="x unified", yaxis_title=f"{unit}/day",
+                           xaxis_range=[t0, pd.Timestamp(end).tz_localize(TZ) + pd.Timedelta(days=1)],
+                           xaxis_tickformat="%d %b")
+        st.plotly_chart(figE, use_container_width=True, key="kwh_daily")
+        full = days[days.index < pd.Timestamp.now(tz=TZ).normalize()]          # today is not complete yet
+        avg = f"mean {full.mean():.1f} kWh/day (≈ {full.mean() * rate:,.0f} บาท) · " if len(full) else ""
+        st.caption(f"{avg}selected dates {days.sum():.1f} kWh ≈ {days.sum() * rate:,.0f} บาท at {rate:g} บาท/kWh · "
+                   "daily kWh from the meter's counter, split by each phase's power (readings every 10 min, from 17 Nov 2026)")
+    else:
+        st.caption("Electricity: no meter reading in the selected dates (readings from 17 Nov 2026)")
 
     with st.expander(f"3-D twin at the cursor — {state.time:%Y-%m-%d %H:%M} (same view as Live, but for that moment)"):
         var = colour_picker("var_hist"); lo, hi = RANGES[var]
