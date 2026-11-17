@@ -26,7 +26,7 @@ sys.path.insert(0, str(ROOT))
 import os  # noqa: E402
 os.environ["PYTHONPATH"] = str(ROOT) + os.pathsep + os.environ.get("PYTHONPATH", "")
 NEEDS_PKG = "2026.11.17.5"
-APP_BUILD = "2026-11-17 e"          # shown in the footer so everyone can tell which version is running
+APP_BUILD = "2026-11-17 f"          # shown in the footer so everyone can tell which version is running
 import pfal_twin  # noqa: E402
 if getattr(pfal_twin, "__version__", "") != NEEDS_PKG:
     for _m in [m for m in sys.modules if m == "pfal_twin" or m.startswith("pfal_twin.")]:
@@ -368,8 +368,8 @@ def add_ac_status(fig):
         if a["name"] not in eq.index:
             continue
         r = eq.loc[a["name"]]
-        colour, label = (("#2e9d57", f"แอร์{a['side']} · ทำงาน {a['kw']:.2f} kW") if a["on"] else
-                         ("#9a958a", f"แอร์{a['side']} · ปิด") if a["on"] is False else ("#d9a441", f"แอร์{a['side']} · ไม่ทราบสถานะ"))
+        colour, label = (("#2e9d57", f"แอร์ · ทำงาน {a['kw']:.2f} kW") if a["on"] else      # the twin shows where it is: no left/right
+                         ("#9a958a", "แอร์ · ปิด") if a["on"] is False else ("#d9a441", "แอร์ · ไม่ทราบสถานะ"))
         d = 0.04
         fig.add_trace(viz_box(r.x0 - d, r.x1 + d, r.y0 - d, r.y1 + d, r.z0 - d, r.z1 + d, colour, label, ph))
         xs.append((r.x0 + r.x1) / 2); ys.append(r.y0 - 0.1); zs.append(r.z1 + 0.18); texts.append(label)
@@ -382,7 +382,7 @@ def viz_box(x0, x1, y0, y1, z0, z1, colour, label, ph):
     from pfal_twin import viz
     from pfal_twin.tuya_meter import PHASES
     m = viz.box_mesh(x0, x1, y0, y1, z0, z1, color=colour, opacity=0.75, name=label)
-    m.update(hovertext=f"<b>{label}</b><br>เฟส {PHASES[ph]['line']}: {PHASES[ph]['loads']}", hoverinfo="text", showlegend=False)
+    m.update(hovertext=f"<b>{label}</b><br>วัดจากเฟส {PHASES[ph]['line']} ของมิเตอร์ไฟฟ้า", hoverinfo="text", showlegend=False)
     return m
 
 
