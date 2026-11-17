@@ -25,8 +25,8 @@ sys.path.insert(0, str(ROOT))
 # is already loaded (version mismatch), drop it and re-import.
 import os  # noqa: E402
 os.environ["PYTHONPATH"] = str(ROOT) + os.pathsep + os.environ.get("PYTHONPATH", "")
-NEEDS_PKG = "2026.11.13.1"
-APP_BUILD = "2026-11-13 a"          # shown in the footer so everyone can tell which version is running
+NEEDS_PKG = "2026.11.17.1"
+APP_BUILD = "2026-11-17 a"          # shown in the footer so everyone can tell which version is running
 import pfal_twin  # noqa: E402
 if getattr(pfal_twin, "__version__", "") != NEEDS_PKG:
     for _m in [m for m in sys.modules if m == "pfal_twin" or m.startswith("pfal_twin.")]:
@@ -274,38 +274,75 @@ def plant_meshes(_nonce: int, day: str) -> list:
     return plants3d.plant_traces(plants3d.plant_table(planting_rounds(_nonce), holes, day))
 
 
-@st.cache_resource(ttl=60, show_spinner=False, max_entries=1)
-def meter_now(_nonce: int) -> dict:
-    """Electricity meter right now (Tuya), read at most once a minute for all viewers."""
-    from pfal_twin import tuya_meter as TM
-    return dict(TM.TuyaMeter.from_store().read(), _t=pd.Timestamp.now(tz=TZ))
-
-
-@st.cache_data(ttl=600, show_spinner=False, max_entries=2)
+@st.cache_data(ttl=120, show_spinner=False, max_entries=2)
 def meter_history(_nonce: int, days: int = 120) -> pd.DataFrame:
-    """Meter readings stored in the database (one per data update, scripts/read_meter.py)."""
+    """Meter readings in the database, stored every 10 min by the collector (scripts/collector.py). The web app does
+    not read the meter itself: the Tuya login must have a single owner, or token renewals clash."""
     from pfal_twin import dbstore
     from pfal_twin.sqlapi import SqlApi
     return dbstore.pull_device(SqlApi.from_secrets(), "pm", ["energy", "power", "power_a", "power_b", "power_c"],
                                since=pd.Timestamp.now(tz=TZ) - pd.Timedelta(days=days))
 
 
+METER_STALE = pd.Timedelta("30min")
+
+
 def electricity() -> dict | None:
-    """Power now (kW, per phase), energy today (kWh) and its estimated cost; None when the meter cannot be read."""
+    """Latest meter reading: power (kW, per phase), energy today (kWh) and its estimated cost, and how old it is.
+    None when the database cannot be read or holds no reading yet."""
     from pfal_twin import tuya_meter as TM
     try:
-        now = meter_now(int(time.time() // 60))
+        hist = meter_history(int(time.time() // 120))
     except Exception:
         return None
-    try:
-        hist = meter_history(int(time.time() // 600))
-    except Exception:
-        hist = pd.DataFrame(columns=["energy"])
-    days = TM.daily_energy(hist["energy"], now.get("energy"), now["_t"])
-    today = now["_t"].normalize()
+    last = hist.dropna(subset=["power"]).tail(1)
+    if last.empty:
+        return None
+    t, r = last.index[0], last.iloc[0]
+    now = pd.Timestamp.now(tz=TZ)
+    days = TM.daily_energy(hist["energy"])
+    today = now.normalize()
     kwh = float(days[today]) if today in days.index else float("nan")
-    return dict(kw=now.get("power", float("nan")) / 1000, phases={p: now.get(f"power_{p}", float("nan")) / 1000 for p in "abc"},
-                today_kwh=kwh, today_thb=kwh * tw.params.thb_per_kwh, counter=now.get("energy"), t=now["_t"], daily=days)
+    return dict(kw=r["power"] / 1000, phases={p: r[f"power_{p}"] / 1000 for p in "abc"}, today_kwh=kwh,
+                today_thb=kwh * tw.params.thb_per_kwh, counter=r["energy"], t=t, age=now - t, stale=now - t > METER_STALE, daily=days)
+
+
+def meter_warning(el: dict | None) -> str | None:
+    """Text for a banner when the meter has gone quiet (the collector stopped or the Tuya login was lost)."""
+    if el is None or not el["stale"]:
+        return None
+    return (f"มิเตอร์ไฟฟ้าไม่ได้ส่งค่ามา {age_text(el['age'])} (ล่าสุด {el['t']:%d %b %H:%M}) · ตัวเก็บข้อมูลอาจหยุด "
+            "หรือการล็อกอิน Tuya หลุด ถ้าเกิน 2 ชั่วโมงต้องสแกน QR ใหม่: scripts/tuya_login.py")
+
+
+def sustained_alerts(minutes: int = 60) -> list[str]:
+    """Readings outside the twin limits (tw.limits) for the whole last `minutes` (at least 3 samples, 5-min averages from
+    ThingsBoard). A device that sends nothing gives no alert here: the per-device status line covers that."""
+    try:
+        R = recent_window(24, int(time.time() // 60))
+    except Exception:
+        return []
+    if R.empty or pd.Timestamp.now(tz=TZ) - R.index.max() > pd.Timedelta("2h"):
+        return []
+    L, win = tw.limits, R[R.index > R.index.max() - pd.Timedelta(minutes=minutes)]
+    col = lambda k: win[k].dropna() if k in win else pd.Series(dtype=float)
+    mean = lambda ks: win[[k for k in ks if k in win]].mean(axis=1).dropna() if any(k in win for k in ks) else pd.Series(dtype=float)
+    setp = lambda k: R[k].ffill().iloc[-1] if k in R and R[k].notna().any() else float("nan")
+    out = []
+
+    def check(s, bad, text):
+        if len(s) >= 3 and bool(bad(s).all()):
+            out.append(text.format(v=s.iloc[-1]) + f" นานกว่า {minutes // 60} ชม.")
+
+    walls = (21, 22, 23)
+    check(mean([f"gw.xy_md_{a}_t" for a in walls]), lambda s: s > L["T_max"], "อุณหภูมิห้อง {v:.1f} °C สูงกว่า " + f"{L['T_max']:g} °C")
+    check(mean([f"gw.xy_md_{a}_h" for a in walls]), lambda s: s > L["RH_max"], "ความชื้น {v:.0f} % สูงกว่า " + f"{L['RH_max']:g} %")
+    for dev, name in (("gc1", "ชั้นปลูก"), ("gc2", "ชั้นอนุบาล")):
+        sp = setp(f"{dev}.ecSetPoint")
+        if sp == sp:
+            check(col(f"{dev}.ec"), lambda s, sp=sp: (s - sp).abs() > L["EC_tol"], f"EC {name} " + "{v:.2f}" + f" ห่างค่าตั้ง {sp:.2f} เกิน {L['EC_tol']:g}")
+        check(col(f"{dev}.ph"), lambda s: (s < L["pH_lo"]) | (s > L["pH_hi"]), f"pH {name} " + "{v:.2f}" + f" นอกช่วง {L['pH_lo']:g}–{L['pH_hi']:g}")
+    return out
 
 
 def add_plants(fig) -> bool:
@@ -553,6 +590,8 @@ elif page == "Dashboard":
     .tv-head .live {display: inline-block; font-size: 13px; font-weight: 600; color: #1f6b67; background: #e4f1ee;
                     border-radius: 999px; padding: 2px 10px; margin-bottom: 4px;}
     .tv-head .live.stale {color: #9a6a12; background: #f8ecd2;}
+    .tv-head .alert {display: inline-block; margin-top: 4px; font-size: 14px; font-weight: 600; color: #a5281b;
+                     background: #fbe3df; border-radius: 999px; padding: 2px 12px; white-space: nowrap;}
     .tv-head .logos {justify-self: end; display: flex; gap: 14px; align-items: center; background: #fff; padding: 8px 14px;
                      border-radius: 12px; border: 1px solid #e3dfd4;}
     .tv-head .logos img {height: 56px;}
@@ -662,12 +701,15 @@ btn.onclick = async () => {
         state, _, ages = dash_state()
         now = pd.Timestamp.now(tz=TZ)
         fresh = bool(ages) and min(ages.values()) < pd.Timedelta("15min")
+        alerts = sustained_alerts() + ([meter_warning(electricity()).split(" · ")[0]] if meter_warning(electricity()) else [])
+        alert_html = (f'<div class="alert">⚠ {alerts[0]}' + (f" · และอีก {len(alerts) - 1} รายการ" if len(alerts) > 1 else "") + "</div>"
+                      if alerts else "")
         st.markdown(f"""<div class="tv-head">
   <div class="brand"><img src="{_data_uri(ASSETS / 'pfal.svg', 'image/svg+xml')}" width="62" height="62" alt="">
     <div><div class="name">SIS PFAL<span>ห้องปลูกพืชระบบปิดด้วยแสงเทียม</span></div>
       <div class="sub">Digital twin · โรงประลอง (Fab Lab) วิทยาลัยบูรณาการศาสตร์ มหาวิทยาลัยเกษตรศาสตร์</div></div></div>
   <div class="clock"><span class="live{'' if fresh else ' stale'}">{'● LIVE' if fresh else '● ข้อมูลล่าสุด'}</span>
-    <div class="t">{now:%H:%M}</div><div class="d">{now:%d %b %Y} · ค่าวัด {state.time:%H:%M}</div></div>
+    <div class="t">{now:%H:%M}</div><div class="d">{now:%d %b %Y} · ค่าวัด {state.time:%H:%M}</div>{alert_html}</div>
   <div class="logos"><img src="{_data_uri(ASSETS / 'logo_ku.png', 'image/png')}" alt="KU"><img src="{_data_uri(ASSETS / 'logo_sis.png', 'image/png')}" alt="SIS"></div>
 </div>""", unsafe_allow_html=True)
     dash_header()
@@ -702,7 +744,7 @@ btn.onclick = async () => {
         if not R.empty:
             walls = [c for c in (f"gw.xy_md_{a}_t" for a in (21, 22, 23)) if c in R]
             framed_chart(trend({"ในห้อง": R[walls].mean(axis=1) if walls else pd.Series(dtype=float),
-                                "ภายนอก": R.get("gw.xy_md_24_t", pd.Series(dtype=float))}, "อุณหภูมิ 24 ชม.", "°C", 232), 232)
+                                "ภายนอก": R.get("gw.xy_md_24_t", pd.Series(dtype=float))}, "อุณหภูมิ 24 ชม.", "°C", 214), 214)
     @st.fragment(run_every="60s")
     def dash_right():
         state, g, off, R = side_data()
@@ -718,7 +760,9 @@ btn.onclick = async () => {
         pump = "ทำงาน" if state.pump_on["gc1"] else "หยุด"
         if el is not None:      # electricity meter: power now, energy and cost today; LED / pump state in the small line
             today = f"วันนี้ {el['today_kwh']:.1f} kWh · ≈ {el['today_thb']:,.0f} บาท" if el["today_kwh"] == el["today_kwh"] else "วันนี้ — kWh"
-            power_tile = tile("ไฟฟ้า · electricity", fmt(el["kw"], 2), "kW", f"{today} · LED {led} · ปั๊ม{pump}", LIGHT)
+            power_tile = tile("ไฟฟ้า · electricity", fmt(el["kw"], 2), "kW",
+                              f"มิเตอร์เงียบ {age_text(el['age'])}" if el["stale"] else f"{today} · LED {led} · ปั๊ม{pump}",
+                              LIGHT, None, el["stale"])
         else:
             power_tile = tile("ไฟ LED · ปั๊มน้ำ", f"{led}<small>ไฟ</small> · {pump}", "",
                               f"วันปลูกที่ {fmt(state.plant_day['growing (gc1)'], 0)} ตามตัวควบคุม", LIGHT, None, off("gc1"))
@@ -736,10 +780,10 @@ btn.onclick = async () => {
         if not R.empty:
             co2 = R.get("co2.CO2", pd.Series(dtype=float))
             if co2.notna().any():
-                fig = trend({"CO₂": co2}, "CO₂ 24 ชม.", "ppm", 232)
+                fig = trend({"CO₂": co2}, "CO₂ 24 ชม.", "ppm", 214)
             else:
-                fig = trend({"EC ชั้นปลูก": R.get("gc1.ec", pd.Series(dtype=float))}, "EC ชั้นปลูก 24 ชม.", "mS/cm", 232, ecg_sp)
-            framed_chart(fig, 232)
+                fig = trend({"EC ชั้นปลูก": R.get("gc1.ec", pd.Series(dtype=float))}, "EC ชั้นปลูก 24 ชม.", "mS/cm", 214, ecg_sp)
+            framed_chart(fig, 214)
 
     with left:
         dash_left()
@@ -827,7 +871,12 @@ elif page == "Live":
                    + (f" · ⚠ stale: {', '.join(stale)}" if stale else ""))
 
         # ---- electricity meter (Tuya, 3-phase): power now and energy today
+        for a in sustained_alerts():
+            st.error(a, icon="⚠️")
         el = electricity()
+        warn = meter_warning(el)
+        if warn:
+            st.warning(warn, icon="⚡")
         if el is not None:
             c = st.columns(5)
             c[0].metric("ไฟฟ้าตอนนี้ · power now", fmt(el["kw"], 2, " kW"))
@@ -836,6 +885,7 @@ elif page == "Live":
             c[4].metric("วันนี้ · today", fmt(el["today_kwh"], 1, " kWh"),
                         f"≈ {el['today_thb']:,.0f} บาท ({tw.params.thb_per_kwh:g} บาท/kWh)" if el["today_kwh"] == el["today_kwh"] else None,
                         delta_color="off")
+            st.caption(f"มิเตอร์ไฟฟ้า 3 เฟส · ค่า ณ {el['t']:%H:%M} (อ่านทุก 10 นาที) · ค่าไฟประมาณจาก {tw.params.thb_per_kwh:g} บาท/kWh")
 
         # ---- charts (same window and 5-min averaging as the ThingsBoard dashboard)
         try:

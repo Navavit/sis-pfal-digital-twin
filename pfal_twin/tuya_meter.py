@@ -122,6 +122,18 @@ class TuyaMeter:
         """Decoded readings (W, V, A, kWh, degC) of the meter right now."""
         return decode(self.status())
 
+    def keep_alive(self, margin_s: int = 1200):
+        """Renew the token ahead of time. The access token lives 2 h and the SDK renews it only within its last minute,
+        signing the renewal with the access token itself - once it has expired the login is lost (new QR scan). So when
+        less than `margin_s` is left, mark it expired: the next request renews it while it is still valid."""
+        api = self.manager.customer_api
+        if api.token_info.expire_time - time.time() * 1000 < margin_s * 1000:
+            api.token_info.expire_time = 0
+
+    @property
+    def token_left_s(self) -> float:
+        return self.manager.customer_api.token_info.expire_time / 1000 - time.time()
+
 
 def decode(st: dict) -> dict:
     """Raw data points of the 3-phase breaker -> metric -> value (the metric names used in the database)."""

@@ -1,5 +1,6 @@
 """Read the PFAL electricity meter once and store the readings in the SIS PFAL database (iot_long, device "pm").
-Run by .github/workflows/update_data.yml after the ThingsBoard update; by hand:  .venv/bin/python scripts/read_meter.py
+By hand only:  .venv/bin/python scripts/read_meter.py   - the regular readings come from scripts/collector.py, the one
+owner of the Tuya login; do not run this while the collector runs (two programs renewing the same token clash).
 
 The energy counter only grows, so readings hours apart still give complete kWh per day (pfal_twin.tuya_meter.daily_energy).
 Needs PFAL_DB_USER/PASS (or .streamlit/secrets.toml) and the Tuya login token in the database (scripts/tuya_login.py).

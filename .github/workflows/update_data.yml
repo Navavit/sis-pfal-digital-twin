@@ -55,20 +55,12 @@ jobs:
           git commit -q -m "store $(date -u +'%Y-%m-%dT%H:%MZ')"
           git push --force "https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}.git" data
 
-      # Primary store for the web app; the data branch above stays as the backup it falls back to.
+      # Primary store for the web app; the data branch above stays as the backup it falls back to. Since the outage of
+      # 12 Nov 2026 the SQL API refuses servers abroad (HTTP 500 at login): the collector on the team Mac publishes
+      # instead (scripts/collector.py), so a failure here must not mark the run as failed or send an e-mail.
       - name: Publish to the SIS PFAL SQL database
-        env:
-          PFAL_DB_USER: ${{ secrets.PFAL_DB_USER }}
-          PFAL_DB_PASS: ${{ secrets.PFAL_DB_PASS }}
-        run: python scripts/publish_db.py
-
-      # Electricity meter (Tuya, not in ThingsBoard): one reading per run into the database. Its energy counter only
-      # grows, so daily kWh stays complete however far apart the runs are. A meter / Tuya failure must not fail the run.
-      - name: Read the electricity meter
         continue-on-error: true
         env:
           PFAL_DB_USER: ${{ secrets.PFAL_DB_USER }}
           PFAL_DB_PASS: ${{ secrets.PFAL_DB_PASS }}
-          TUYA_USER_CODE: ${{ secrets.TUYA_USER_CODE }}
-          TUYA_DEVICE_ID: ${{ secrets.TUYA_DEVICE_ID }}
-        run: python scripts/read_meter.py
+        run: python scripts/publish_db.py
