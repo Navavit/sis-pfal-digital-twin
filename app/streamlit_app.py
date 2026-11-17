@@ -26,7 +26,7 @@ sys.path.insert(0, str(ROOT))
 import os  # noqa: E402
 os.environ["PYTHONPATH"] = str(ROOT) + os.pathsep + os.environ.get("PYTHONPATH", "")
 NEEDS_PKG = "2026.11.17.6"
-APP_BUILD = "2026-11-17 g"          # shown in the footer so everyone can tell which version is running
+APP_BUILD = "2026-11-17 h"          # shown in the footer so everyone can tell which version is running
 import pfal_twin  # noqa: E402
 if getattr(pfal_twin, "__version__", "") != NEEDS_PKG:
     for _m in [m for m in sys.modules if m == "pfal_twin" or m.startswith("pfal_twin.")]:
@@ -322,6 +322,30 @@ def meter_warning(el: dict | None) -> str | None:
         return None
     return (f"มิเตอร์ไฟฟ้าไม่ได้ส่งค่ามา {age_text(el['age'])} (ล่าสุด {el['t']:%d %b %H:%M}) · ตัวเก็บข้อมูลอาจหยุด "
             "หรือการล็อกอิน Tuya หลุด ถ้าเกิน 2 ชั่วโมงต้องสแกน QR ใหม่: scripts/tuya_login.py")
+
+
+PHASE_COLOURS = {"b": "#c98a1b", "a": "#2f6fa3", "c": "#1f6b67"}   # LED amber, sockets + right AC blue, room + left AC teal
+
+
+def power_chart(hist: pd.DataFrame, t0, t1, height: int = 300, title: str = "กำลังไฟ · power (kW)"):
+    """Stacked power of the three phases between t0 and t1 (readings every 10 min, held until the next one; a gap
+    over 30 min is left empty). None when there is no reading in the window."""
+    import plotly.graph_objects as go
+    from pfal_twin import tuya_meter as TM
+    h = hist[(hist.index >= t0) & (hist.index <= t1)].reindex(columns=[f"power_{k}" for k in "abc"]).dropna(how="all")
+    if h.empty:
+        return None
+    gap = h.index.to_series().diff() > pd.Timedelta("30min")
+    if gap.any():                                                  # a blank row just before each gap breaks the area
+        h = pd.concat([h, pd.DataFrame(index=h.index[gap.values] - pd.Timedelta("1s"), columns=h.columns, dtype=float)]).sort_index()
+    fig = go.Figure()
+    for k in ("b", "a", "c"):
+        fig.add_scatter(x=h.index, y=h[f"power_{k}"] / 1000, name=f"{TM.PHASES[k]['short']} ({TM.PHASES[k]['line']})", stackgroup="p",
+                        mode="lines", line=dict(width=0.6, color=PHASE_COLOURS[k], shape="hv"), fillcolor=PHASE_COLOURS[k],
+                        hovertemplate="%{y:.2f} kW<extra>" + TM.PHASES[k]["short"] + "</extra>")
+    fig.update_layout(title=dict(text=title, x=0, font=dict(size=14)), height=height, margin=dict(l=45, r=10, t=60, b=30),
+                      yaxis_title="kW", hovermode="x unified", legend=dict(orientation="h", y=1.02, yanchor="bottom", x=0, font=dict(size=11)))
+    return fig
 
 
 def sustained_alerts(minutes: int = 60) -> list[str]:
@@ -947,6 +971,11 @@ elif page == "Live":
             c1, c2 = st.columns(2)
             c1.plotly_chart(ts_chart(R, ["co2.CO2"], "CO₂ (ppm)", "ppm", subtitle=stat_line(R.get("co2.CO2", pd.Series(dtype=float)), 0)), use_container_width=True, key="ts_co2")
             c2.plotly_chart(ts_chart(R, ["co2.VPD", "co2.VOC"], "VPD (kPa) / VOC — CO₂ controller", ""), use_container_width=True, key="ts_vpd")
+            if el is not None:
+                now = pd.Timestamp.now(tz=TZ)
+                figP = power_chart(el["hist"], now - pd.Timedelta(hours=hours), now, title=f"กำลังไฟแยกตามเฟส · power by phase (kW), {hours} h")
+                if figP is not None:
+                    st.plotly_chart(figP, use_container_width=True, key="ts_power")
             for dev, nm in (("gc1", "Grow controller gc1 — growing stage, 200 L tank"), ("gc2", "Grow controller gc2 — nursery 2, 100 L tank")):
                 st.markdown(f"**{nm}**")
                 c1, c2, c3 = st.columns([2, 2, 1.4])
@@ -992,18 +1021,20 @@ elif page == "History":
             import plotly.graph_objects as go
             from pfal_twin import tuya_meter as TM
             rate = tw.params.thb_per_kwh
+            unit = st.radio("หน่วย · unit", ["kWh", "บาท"], horizontal=True, key="kwh_unit", label_visibility="collapsed")
+            f, u = (1.0, "kWh") if unit == "kWh" else (rate, "บาท")
             ph = TM.phase_daily_energy(el["hist"], days)
-            colours = {"b": "#c98a1b", "a": "#2f6fa3", "c": "#1f6b67"}            # LED amber, sockets + AC blue, room + AC teal
+            colours = PHASE_COLOURS
             figE = go.Figure()
             for k in ("b", "a", "c"):
                 if k in ph and ph[k].notna().any():
-                    figE.add_bar(x=ph.index, y=ph[k], name=f"{TM.PHASES[k]['short']} ({TM.PHASES[k]['line']})", marker_color=colours[k],
-                                 hovertemplate="%{x|%d %b}: %{y:.1f} kWh<extra>" + TM.PHASES[k]["loads"] + "</extra>")
+                    figE.add_bar(x=ph.index, y=ph[k] * f, name=f"{TM.PHASES[k]['short']} ({TM.PHASES[k]['line']})", marker_color=colours[k],
+                                 hovertemplate="%{x|%d %b}: %{y:,.1f} " + u + "<extra>" + TM.PHASES[k]["loads"] + "</extra>")
             rest = days.drop(ph.index, errors="ignore")                         # days before the per-phase readings
             if len(rest):
-                figE.add_bar(x=rest.index, y=rest.values, name="รวม (ยังไม่แยกประเภท)", marker_color="#b9b3a6",
-                             hovertemplate="%{x|%d %b}: %{y:.1f} kWh<extra>รวม</extra>")
-            figE.update_layout(barmode="stack", height=300, margin=dict(l=45, r=10, t=10, b=30), yaxis_title="kWh/day", bargap=0.25,
+                figE.add_bar(x=rest.index, y=rest.values * f, name="รวม (ยังไม่แยกประเภท)", marker_color="#b9b3a6",
+                             hovertemplate="%{x|%d %b}: %{y:,.1f} " + u + "<extra>รวม</extra>")
+            figE.update_layout(barmode="stack", height=300, margin=dict(l=45, r=10, t=10, b=30), yaxis_title=f"{u}/วัน", bargap=0.25,
                                legend=dict(orientation="h", y=1.02, yanchor="bottom", x=0))
             st.plotly_chart(figE, use_container_width=True, key="kwh_daily")
             full = days.iloc[:-1] if len(days) > 1 else days          # the last day is today: not complete yet
@@ -1090,6 +1121,18 @@ elif page == "History":
         fig.add_vline(x=pd.Timestamp(pick), line_dash="dot", line_color="grey")
         fig.update_layout(title=g, height=300, margin=dict(l=40, r=20, t=40, b=30), legend=dict(orientation="h", y=-0.25), hovermode="x unified")
         st.plotly_chart(fig, use_container_width=True, key=f"ts_{g}")
+    el = electricity()
+    if el is not None:
+        t0 = pd.Timestamp(start).tz_localize(TZ); t1 = pd.Timestamp(end).tz_localize(TZ) + pd.Timedelta(days=1)
+        figP = power_chart(el["hist"], t0, t1, height=320, title=f"กำลังไฟแยกตามเฟส · power by phase (kW), {start:%d %b} – {end:%d %b %Y}")
+        if figP is not None:
+            figP.add_vline(x=pd.Timestamp(pick), line_dash="dot", line_color="grey")
+            sel = el["daily"][(el["daily"].index >= t0) & (el["daily"].index < t1)]
+            st.plotly_chart(figP, use_container_width=True, key="ts_power_hist")
+            if len(sel):
+                st.caption(f"ช่วงที่เลือก: {sel.sum():.1f} kWh ≈ {sel.sum() * tw.params.thb_per_kwh:,.0f} บาท (ที่ {tw.params.thb_per_kwh:g} บาท/kWh)")
+        else:
+            st.caption("ไม่มีค่ามิเตอร์ไฟฟ้าในช่วงวันที่เลือก (เริ่มเก็บรายเฟส 17 พ.ย. 2026)")
 
     with st.expander(f"3-D twin at the cursor — {state.time:%Y-%m-%d %H:%M} (same view as Live, but for that moment)"):
         var = colour_picker("var_hist"); lo, hi = RANGES[var]
