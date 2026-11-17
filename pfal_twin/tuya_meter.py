@@ -11,7 +11,8 @@ local copy for when the database is unreachable. It is never printed.
     meter.status()                      # raw Tuya data points of the breaker
     meter.read()                        # {"power": 4118.0, "power_a": 1255.0, ..., "energy": 20.55, "temp": 38.0}
 
-The meter is a 3-phase smart breaker (Tuya category dlq). Each phase_x data point is 8 bytes: voltage (2 bytes, 0.1 V),
+The meter is a Tuya "3P4W WiFi Photovoltaic smart meter" (100 A; reported as category dlq / Breaker) measuring
+current through three clamp-on CTs (terminals I1, I2, I3); photo: docs/photos/electrical/ (local, not in git). Each phase_x data point is 8 bytes: voltage (2 bytes, 0.1 V),
 current (3 bytes, mA), active power (3 bytes, W). total_forward_energy counts 0.01 kWh (checked against the measured
 power: +16 counts in 2.6 min at 4.1 kW). Stored in the database as device "pm" (see docs/DATA_DICTIONARY.md).
 """
@@ -35,8 +36,8 @@ TOKEN_ROW = "tuya_token"
 DEVICE = "pm"                     # device name of the meter in the database
 TZ = "Asia/Bangkok"
 ENERGY_PER_COUNT = 0.01           # kWh per count of total_forward_energy
-# What each phase feeds (PFAL panel, breaker numbers; team, 17 Nov 2026). The meter's own breakers 19/21/23 only give it
-# the three phases: it reads the whole panel (the LED circuit 22 and the AC on 18/20 show up in its phases).
+# What each phase feeds (PFAL panel, breaker numbers; team, 17 Nov 2026). Breakers 19/21/23 only feed the meter's voltage
+# inputs (V1-V3); its CTs read the whole panel (the LED circuit 22 and the AC on 18/20 show up in its phases).
 PHASES = {"a": dict(line="L1", colour="น้ำตาล", short="ปลั๊ก + แอร์ 1", loads="ปลั๊กไฟในห้อง (2) + แอร์ (20)"),
           "b": dict(line="L2", colour="ดำ", short="LED ชั้นปลูก", loads="ไฟ LED ชั้นปลูก (22)"),
           "c": dict(line="L3", colour="เทา", short="ไฟห้อง + แอร์ 2", loads="แสงสว่างในห้อง (1) + แอร์ (18)")}
