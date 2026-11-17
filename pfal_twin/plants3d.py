@@ -290,8 +290,8 @@ def plant_traces(plants: pd.DataFrame, seed: int = 7) -> list:
             X.append(vx); Y.append(vy); Z.append(vz); F.append(f + n); C.append(c); n += len(vx)
         F = np.concatenate(F)
         f32 = lambda a: np.concatenate(a).astype(np.float32)    # float32 halves what the browser downloads
-        hover = (f"<b>{crop}</b> · {len(g)} ต้น<br>รอบ {', '.join(dict.fromkeys(g['round']))}<br>"
-                 f"ชั้น {', '.join(str(t) for t in sorted(g['tier'].unique()))}<br>เก็บ (คาด) {', '.join(dict.fromkeys(g['harvest']))}")
+        hover = (f"<b>{crop}</b> · {len(g)} plants<br>round {', '.join(dict.fromkeys(g['round']))}<br>"
+                 f"tier {', '.join(str(t) for t in sorted(g['tier'].unique()))}<br>harvest (planned) {', '.join(dict.fromkeys(g['harvest']))}")
         traces.append(go.Mesh3d(x=f32(X), y=f32(Y), z=f32(Z), i=F[:, 0], j=F[:, 1], k=F[:, 2],
                                 intensity=f32(C), cmin=0, cmax=1, colorscale=colorscale(sty), showscale=False,
                                 name=f"{crop} ({len(g)})", showlegend=True, hovertext=hover, hoverinfo="text",

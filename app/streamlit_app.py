@@ -25,8 +25,8 @@ sys.path.insert(0, str(ROOT))
 # is already loaded (version mismatch), drop it and re-import.
 import os  # noqa: E402
 os.environ["PYTHONPATH"] = str(ROOT) + os.pathsep + os.environ.get("PYTHONPATH", "")
-NEEDS_PKG = "2026.11.17.5"
-APP_BUILD = "2026-11-17 f"          # shown in the footer so everyone can tell which version is running
+NEEDS_PKG = "2026.11.17.6"
+APP_BUILD = "2026-11-17 g"          # shown in the footer so everyone can tell which version is running
 import pfal_twin  # noqa: E402
 if getattr(pfal_twin, "__version__", "") != NEEDS_PKG:
     for _m in [m for m in sys.modules if m == "pfal_twin" or m.startswith("pfal_twin.")]:
@@ -368,8 +368,8 @@ def add_ac_status(fig):
         if a["name"] not in eq.index:
             continue
         r = eq.loc[a["name"]]
-        colour, label = (("#2e9d57", f"แอร์ · ทำงาน {a['kw']:.2f} kW") if a["on"] else      # the twin shows where it is: no left/right
-                         ("#9a958a", "แอร์ · ปิด") if a["on"] is False else ("#d9a441", "แอร์ · ไม่ทราบสถานะ"))
+        colour, label = (("#2e9d57", f"AC on · {a['kw']:.2f} kW") if a["on"] else      # the twin shows where it is: no left/right
+                         ("#9a958a", "AC off") if a["on"] is False else ("#d9a441", "AC status unknown"))
         d = 0.04
         fig.add_trace(viz_box(r.x0 - d, r.x1 + d, r.y0 - d, r.y1 + d, r.z0 - d, r.z1 + d, colour, label, ph))
         xs.append((r.x0 + r.x1) / 2); ys.append(r.y0 - 0.1); zs.append(r.z1 + 0.18); texts.append(label)
@@ -382,7 +382,7 @@ def viz_box(x0, x1, y0, y1, z0, z1, colour, label, ph):
     from pfal_twin import viz
     from pfal_twin.tuya_meter import PHASES
     m = viz.box_mesh(x0, x1, y0, y1, z0, z1, color=colour, opacity=0.75, name=label)
-    m.update(hovertext=f"<b>{label}</b><br>วัดจากเฟส {PHASES[ph]['line']} ของมิเตอร์ไฟฟ้า", hoverinfo="text", showlegend=False)
+    m.update(hovertext=f"<b>{label}</b><br>from phase {PHASES[ph]['line']} of the electricity meter", hoverinfo="text", showlegend=False)
     return m
 
 
@@ -838,7 +838,7 @@ btn.onclick = async () => {
             fig = tw.figure_3d(var="T", st=state, cmin=20, cmax=35, height=660, title_prefix="", public=True)
             add_plants(fig)
             add_ac_status(fig)
-            fig.update_layout(title=dict(text="ห้องปลูก 3 มิติ · ต้นพืชตามบันทึกรอบปลูก · สีชั้นปลูก = อุณหภูมิห้อง", x=0.5, xanchor="center",
+            fig.update_layout(title=dict(text="3-D twin · plants from the planting log · rack colour = room temperature", x=0.5, xanchor="center",
                                          font=dict(size=17)),
                               showlegend=False, margin=dict(l=0, r=0, t=40, b=0), width=CENTRE_W, autosize=False,
                               scene_camera=dict(eye=dict(x=0.62, y=-0.95, z=0.48), center=dict(x=0.05, y=0, z=-0.12)))
