@@ -26,7 +26,7 @@ sys.path.insert(0, str(ROOT))
 import os  # noqa: E402
 os.environ["PYTHONPATH"] = str(ROOT) + os.pathsep + os.environ.get("PYTHONPATH", "")
 NEEDS_PKG = "2026.11.17.6"
-APP_BUILD = "2026-11-17 h"          # shown in the footer so everyone can tell which version is running
+APP_BUILD = "2026-11-17 i"          # shown in the footer so everyone can tell which version is running
 import pfal_twin  # noqa: E402
 if getattr(pfal_twin, "__version__", "") != NEEDS_PKG:
     for _m in [m for m in sys.modules if m == "pfal_twin" or m.startswith("pfal_twin.")]:
@@ -558,12 +558,14 @@ _ss = st.session_state.get("store_status", {}); _lm = _ss.get("local") or {}
 st.sidebar.markdown(f"**History store**  \n{d0:%Y-%m-%d} → {d1:%Y-%m-%d %H:%M}  \n{len(tw.data):,} × 10-min bins  \n"
                     f"<small>updated {pd.Timestamp(_lm['updated_at']).tz_convert(TZ):%d %b %H:%M} · {_ss.get('action', '')}</small>" if _lm.get("updated_at") else
                     f"**History store**  \n{d0:%Y-%m-%d} → {d1:%Y-%m-%d %H:%M}  \n{len(tw.data):,} × 10-min bins", unsafe_allow_html=True)
-if st.sidebar.button("↻ check for new data", help="GitHub Actions refreshes the store every 30 min and the app tops it up from ThingsBoard every 10 min — this checks now"):
+if st.sidebar.button("↻ check for new data", help="The collector publishes new data to the database every hour (GitHub Actions keeps a backup copy every few hours) and the app tops it up from ThingsBoard every 10 min — this checks now"):
     store_version.clear(); top_up.clear(); static_figure.clear(); static_png.clear(); st.rerun()
 with st.sidebar.expander("about"):
     st.code(tw.summary(), language=None)
     st.markdown(f"{PROJECT['en']}  \nSIS PFAL = plant factory with artificial lighting at the School of Integrated Science.  \n"
-                "Source: ThingsBoard public dashboard *Vertical Smart Farming* (cat-smartgrow.com). Geometry from the LiDAR scan of 2026-09-13.")
+                "Sources: ThingsBoard public dashboard *Vertical Smart Farming* (cat-smartgrow.com) for the sensors and controllers; "
+                "the team's planting log (Google Sheet) for what grows where; a 3-phase electricity meter (Tuya) for power and energy. "
+                "Geometry from the LiDAR scan of 2026-09-13.")
 SPONSOR_URL = "https://www.civicagrotech.com/"
 _sponsor_b64 = __import__("base64").b64encode((ASSETS / "civic_agrotech_logo.png").read_bytes()).decode()
 
@@ -590,13 +592,15 @@ if page == "Overview":
 
     st.markdown("""
 #### แอปนี้ทำอะไรได้ · What this app does
-Digital twin = แบบจำลองห้องปลูกจริง (รูปทรงจาก LiDAR) ที่ผูกกับข้อมูลเซ็นเซอร์จริงจาก ThingsBoard — ดูสภาพห้อง **ตอนนี้**, **ย้อนหลัง** และ **ลองสถานการณ์** ได้จากที่เดียว
+Digital twin = แบบจำลองห้องปลูกจริง (รูปทรงจาก LiDAR) ที่ผูกกับข้อมูลจริง 3 แหล่ง: เซ็นเซอร์และตัวควบคุมจาก ThingsBoard, **บันทึกรอบปลูก** ของทีม (ปลูกอะไรอยู่ถาดไหน) และ **มิเตอร์ไฟฟ้า 3 เฟส** — ดูสภาพห้อง **ตอนนี้**, **ย้อนหลัง** และ **ลองสถานการณ์** ได้จากที่เดียว
 """)
-    cards = st.columns(4 - ("Layout & water" in HIDDEN_PAGES))
-    k1, k2, k4 = cards[0], cards[1], cards[-1]
-    k3 = cards[2] if len(cards) == 4 else None
-    k1.markdown("**📡 Live**  \nกราฟแบบ dashboard (T/RH 5 จุด, CO₂, EC/pH + set-point, การจ่ายปุ๋ย) + twin 3-D ระบายสีตามค่าจริง รีเฟรชทุก 60 วิ  \n*Real-time charts and the 3-D twin coloured by live readings*")
-    k2.markdown("**🕓 History**  \nเลื่อนเวลาดูห้อง ณ ช่วงใดก็ได้ตั้งแต่ ธ.ค. 2025, กราฟ, KPI, เหตุการณ์ผิดปกติ, ดาวน์โหลด CSV  \n*Time slider, KPIs, events and CSV export since Dec 2025*")
+    cards = st.columns(5 - ("Layout & water" in HIDDEN_PAGES))
+    k1, k5, k2, k4 = cards[0], cards[1], cards[2], cards[-1]
+    k3 = cards[3] if len(cards) == 5 else None
+    k1.markdown("**📡 Live**  \nผังชั้นปลูกวันนี้, twin 3-D พร้อมต้นพืชทุกหลุมและสถานะแอร์, ไฟฟ้า (kW แยกเฟส, kWh และค่าไฟวันนี้), กราฟแบบ dashboard (T/RH 5 จุด, CO₂, EC/pH + set-point, การจ่ายปุ๋ย, กำลังไฟ) และการแจ้งเตือนเมื่อค่าเกินเกณฑ์ รีเฟรชทุก 60 วิ  \n*Today's trays, the 3-D twin with plants and AC status, power and live charts*")
+    k5.markdown("**📺 Dashboard (TV)**  \nหน้าจอเดียวสำหรับขึ้นจอ TV: twin 3-D กลางจอ, อากาศในห้อง, น้ำ ปุ๋ย และไฟฟ้า, กราฟ 24 ชม. ปุ่มเต็มจอ — เปิดจากปุ่มบนหน้า Live หรือ `/dashboard`  \n*One full screen for a TV*")
+    k5.page_link(_DASH, label="เปิด Dashboard", icon=":material/tv:")
+    k2.markdown("**🕓 History**  \nเลื่อนเวลาดูห้อง ณ ช่วงใดก็ได้ตั้งแต่ ธ.ค. 2025, กราฟ, KPI, เหตุการณ์ผิดปกติ, ไฟฟ้ารายวันแยกประเภท (kWh / บาท), ดาวน์โหลด CSV  \n*Time slider, KPIs, events, daily energy by load, CSV export*")
     if k3: k3.markdown("**🗺️ Layout & water**  \nผัง as-built จาก point cloud, ระบบท่อน้ำ/ปุ๋ย, process flow และแอนิเมชันการไหล  \n*As-built layout, pipework and flow animation*")
     k4.markdown("**🌱 What-if**  \nเลือกสัดส่วนผักบน 720 หลุม (ชั้น 2–5) ดูผังรายหลุม 3-D + ผลผลิต/รายได้/แสงที่ต้องการ, สถานการณ์แสง–พลังงาน  \n*Crop-mix and light/energy scenarios*")
 
@@ -610,6 +614,8 @@ Digital twin = แบบจำลองห้องปลูกจริง (ร
             last = tw.data[cols].dropna(how="all").index.max() if cols else None
             txt = f"last data {last:%d %b %Y}" if last is not None and last == last else "no data"
             out.append(f"**{dev}** {device_note(dev, last) or txt}")
+        el = electricity()
+        out.append(f"**pm** (electricity meter) " + (f"last reading {el['t']:%d %b %Y %H:%M}" if el is not None else "no reading"))
         return " · ".join(out)
 
     st.markdown("#### ข้อมูลที่ใช้ · Data behind the twin")
@@ -619,12 +625,15 @@ Digital twin = แบบจำลองห้องปลูกจริง (ร
 |---|---|
 | **ห้อง · room** | {R_['L']:.2f} × {R_['W']:.2f} × {R_['H']:.2f} m — from 2 LiDAR scans (13 Sep 2026) |
 | **ชั้นปลูก · rack** | {K_['length']:.2f} × {K_['width']:.2f} m, {len(K_['tiers'])} tiers · 720 planting holes on tiers 2–5 (6 × 30 per tier) · nursery 2 (tier 1): 126 holes (6 × 21) |
-| **เซ็นเซอร์ / อุปกรณ์ · sensors / equipment** | {len(tw.sensors)} sensor units (5 × XY-MD02 T/RH, CO₂ controller, 2 grow controllers) · {len(tw.equipment)} mapped items |
-| **ข้อมูล IoT · records** | {len(tw.data):,} × 10-min bins, {d0:%d %b %Y} → {d1:%d %b %Y} (refreshed every 30 min) |
+| **เซ็นเซอร์ / อุปกรณ์ · sensors / equipment** | {len(tw.sensors)} sensor units (5 × XY-MD02 T/RH, CO₂ controller, 2 grow controllers) + 3-phase electricity meter (whole room) · {len(tw.equipment)} mapped items |
+| **ข้อมูล IoT · records** | {len(tw.data):,} × 10-min bins, {d0:%d %b %Y} → {d1:%d %b %Y} · into the SIS PFAL database every hour, live values from ThingsBoard every minute |
+| **ไฟฟ้า · electricity** | 3-phase 4-wire smart meter (Tuya, 100 A, CTs on the room's supply), read every 10 min: L1 = sockets + right AC, L2 = LED of the growing tiers, L3 = room lighting + left AC — from 17 Nov 2026 |
+| **รอบปลูก · planting log** | the team's Google Sheet (*PFAL Management* → public copy *PFAL รอบปลูก*), re-read every 10 min: crop, tiers / trays, transplant and harvest dates |
 | **สถานะอุปกรณ์ · device status** | {device_status_text()} |
-| **แหล่งข้อมูล · source** | ThingsBoard dashboard *Vertical Smart Farming* — cat-smartgrow.com (Civic Agrotech) |
+| **แหล่งข้อมูล · sources** | ThingsBoard dashboard *Vertical Smart Farming* — cat-smartgrow.com (Civic Agrotech) · planting log · Tuya electricity meter |
 """)
-    st.caption("Model parameters of the what-if layer are schematic until calibrated with PPFD and harvest measurements (LED: 30 × 42 W lamps per growing tier). Photos: site survey 13 Sep 2026.")
+    st.caption("Model parameters of the what-if layer are schematic until calibrated with PPFD and harvest measurements (LED: 30 × 42 W lamps per growing tier, "
+               "rated 5.04 kW for tiers 2–5; the meter reads about 2.8 kW on the LED circuit at the controllers' 22–35 % brightness). Photos: site survey 13 Sep 2026.")
 
 # ============================================================================ LIVE
 elif page == "Dashboard":
@@ -781,12 +790,19 @@ btn.onclick = async () => {
 
     left, centre, right = st.columns([1, 2.65, 1], gap="medium")
 
+    def last_heard(dev: str) -> str:
+        """'ส่งข้อมูลล่าสุด 14 พ.ย. 13:40' from the store (for a tile whose device is offline)."""
+        cols = [c for c in tw.data.columns if c.startswith(dev + ".") and "SetPoint" not in c]
+        last = tw.data[cols].dropna(how="all").index.max() if cols else None
+        return f"ส่งข้อมูลล่าสุด {last:%d %b %H:%M}" if last is not None and last == last else "ยังไม่มีข้อมูล"
+
     def side_data():
         """Latest state, value getter, 'device offline' test and the last 24 h (all cached, shared by both sides)."""
         state, row, ages = dash_state()
         g = lambda k: float(row.get(k, float("nan"))) if row is not None else float("nan")
         now = pd.Timestamp.now(tz=TZ)
-        off = lambda d: bool(device_note(d, now - ages[d])) if d in ages else False
+        # offline = nothing in the last hour (or a known outage note); the live table only holds the last 24 h
+        off = lambda d: d not in ages or ages[d] > pd.Timedelta("1h") or bool(device_note(d, now - ages[d]))
         try:
             R = recent_window(24, int(time.time() // 60))
         except Exception:
@@ -802,7 +818,7 @@ btn.onclick = async () => {
                     tile("ความชื้นสัมพัทธ์ · humidity", fmt(RH, 0), "%", f"สูงสุดที่เหมาะ {LIM['RH_max']:.0f} %", AIR, RH == RH and RH <= LIM["RH_max"], off("gw")) +
                     tile("VPD · ความต่างแรงดันไอน้ำ", fmt(V, 2), "kPa", f"ช่วงเหมาะ {LIM['VPD_lo']}–{LIM['VPD_hi']} kPa", AIR,
                          V == V and LIM["VPD_lo"] <= V <= LIM["VPD_hi"], off("gw")) +
-                    tile("CO₂", fmt(CO2, 0), "ppm", "ในห้องปลูก", AIR, None, off("co2")) +
+                    tile("CO₂", fmt(CO2, 0), "ppm", last_heard("co2") if off("co2") else "ในห้องปลูก", AIR, None, off("co2")) +
                     tile("ภายนอก · ห้องเตรียม", f"{fmt(state.ch_T['xy_md_24'], 1)}<small>°C</small> · {fmt(state.ch_T['xy_md_20'], 1)}", "°C",
                          f"RH {fmt(state.ch_RH['xy_md_24'], 0)} % · {fmt(state.ch_RH['xy_md_20'], 0)} %", AIR, None, off("gw")),
                     unsafe_allow_html=True)
@@ -879,7 +895,7 @@ btn.onclick = async () => {
         tv_controls()
     if c_exit.button("ออกจากโหมดจอ", type="tertiary", key="tv_exit"):
         st.switch_page(_SITE)
-    c_note.markdown("<div class='tv-foot' style='text-align:right;padding-top:6px'>ข้อมูลจากเซ็นเซอร์ IoT ในห้องปลูก (ThingsBoard) · "
+    c_note.markdown("<div class='tv-foot' style='text-align:right;padding-top:6px'>ข้อมูลจากเซ็นเซอร์ IoT ในห้องปลูก (ThingsBoard) และมิเตอร์ไฟฟ้า · "
                     "ต้นพืช 3 มิติเป็นภาพประกอบตามบันทึกรอบปลูก · sis-pfal-digital-twin.streamlit.app</div>", unsafe_allow_html=True)
     st.stop()   # no footer: the screen ends here
 
@@ -1009,7 +1025,7 @@ elif page == "History":
     upd = f" · store updated {pd.Timestamp(_lm['updated_at']).tz_convert(TZ):%d %b %Y %H:%M}" if _lm.get("updated_at") else ""
     st.markdown(f"**ข้อมูลมีตั้งแต่ · data available from {d0:%d %b %Y %H:%M} → {d1:%d %b %Y %H:%M}** ({days} days, {len(tw.data):,} × 10-min bins, {tw.data.shape[1]} columns){upd}  \n"
                 f"Shown from {pd.Timestamp(HISTORY_START):%d %b %Y} (start of continuous operation; earlier commissioning samples are in the full store — download below). "
-                "Store (SIS PFAL SQL database) refreshed every 30 min + topped up from ThingsBoard every 10 min; grey days below = the device sent nothing that day.")
+                "Store (SIS PFAL SQL database) gets new data every hour + the app tops it up from ThingsBoard every 10 min; grey days below = the device sent nothing that day.")
     st.plotly_chart(availability_figure(STORE_VERSION), use_container_width=True, key="availability")
     with st.container(border=True):
         st.markdown("**ไฟฟ้า · electricity: kWh ต่อวัน แยกตามประเภท (มิเตอร์ 3 เฟสของห้อง)**")
