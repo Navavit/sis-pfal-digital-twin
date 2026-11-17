@@ -25,8 +25,8 @@ sys.path.insert(0, str(ROOT))
 # is already loaded (version mismatch), drop it and re-import.
 import os  # noqa: E402
 os.environ["PYTHONPATH"] = str(ROOT) + os.pathsep + os.environ.get("PYTHONPATH", "")
-NEEDS_PKG = "2026.11.17.1"
-APP_BUILD = "2026-11-17 a"          # shown in the footer so everyone can tell which version is running
+NEEDS_PKG = "2026.11.17.2"
+APP_BUILD = "2026-11-17 b"          # shown in the footer so everyone can tell which version is running
 import pfal_twin  # noqa: E402
 if getattr(pfal_twin, "__version__", "") != NEEDS_PKG:
     for _m in [m for m in sys.modules if m == "pfal_twin" or m.startswith("pfal_twin.")]:
@@ -880,8 +880,10 @@ elif page == "Live":
         if el is not None:
             c = st.columns(5)
             c[0].metric("ไฟฟ้าตอนนี้ · power now", fmt(el["kw"], 2, " kW"))
+            from pfal_twin.tuya_meter import PHASES
             for i, ph in enumerate("abc"):
-                c[1 + i].metric(f"เฟส {ph.upper()} · phase {ph.upper()}", fmt(el["phases"][ph], 2, " kW"))
+                c[1 + i].metric(f"{PHASES[ph]['line']} · {PHASES[ph]['short']}", fmt(el["phases"][ph], 2, " kW"),
+                                help=f"เฟส {PHASES[ph]['line']} (สาย{PHASES[ph]['colour']}): {PHASES[ph]['loads']}")
             c[4].metric("วันนี้ · today", fmt(el["today_kwh"], 1, " kWh"),
                         f"≈ {el['today_thb']:,.0f} บาท ({tw.params.thb_per_kwh:g} บาท/kWh)" if el["today_kwh"] == el["today_kwh"] else None,
                         delta_color="off")

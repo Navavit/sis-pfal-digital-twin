@@ -21,7 +21,7 @@ Read by `scripts/read_meter.py` at every data update (GitHub Actions) through th
 | metric | meaning |
 |---|---|
 | `power` | total active power, sum of the three phases (W) |
-| `power_a`, `power_b`, `power_c` | active power per phase (W) |
+| `power_a`, `power_b`, `power_c` | active power per phase (W): **a = L1** (brown) socket outlets (breaker 2) + air conditioner (20); **b = L2** (black) LED lights of the growing tiers (22); **c = L3** (grey) room lighting (1) + air conditioner (18). The meter sits on breakers 19/21/23 for its voltage but reads the whole panel |
 | `voltage_a`, `voltage_b`, `voltage_c` | phase-to-neutral voltage (V) |
 | `current_a`, `current_b`, `current_c` | phase current (A) |
 | `energy` | energy counter, total forward energy (kWh; the meter counts 0.01 kWh) — only grows, so kWh per day = difference at midnight, interpolated between the readings around it |
