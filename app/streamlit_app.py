@@ -25,8 +25,8 @@ sys.path.insert(0, str(ROOT))
 # is already loaded (version mismatch), drop it and re-import.
 import os  # noqa: E402
 os.environ["PYTHONPATH"] = str(ROOT) + os.pathsep + os.environ.get("PYTHONPATH", "")
-NEEDS_PKG = "2026.11.17.4"
-APP_BUILD = "2026-11-17 d"          # shown in the footer so everyone can tell which version is running
+NEEDS_PKG = "2026.11.17.5"
+APP_BUILD = "2026-11-17 e"          # shown in the footer so everyone can tell which version is running
 import pfal_twin  # noqa: E402
 if getattr(pfal_twin, "__version__", "") != NEEDS_PKG:
     for _m in [m for m in sys.modules if m == "pfal_twin" or m.startswith("pfal_twin.")]:
@@ -352,6 +352,38 @@ def sustained_alerts(minutes: int = 60) -> list[str]:
             check(col(f"{dev}.ec"), lambda s, sp=sp: (s - sp).abs() > L["EC_tol"], f"EC {name} " + "{v:.2f}" + f" ห่างค่าตั้ง {sp:.2f} เกิน {L['EC_tol']:g}")
         check(col(f"{dev}.ph"), lambda s: (s < L["pH_lo"]) | (s > L["pH_hi"]), f"pH {name} " + "{v:.2f}" + f" นอกช่วง {L['pH_lo']:g}–{L['pH_hi']:g}")
     return out
+
+
+def add_ac_status(fig):
+    """Mark the two AC indoor units in a 3-D twin figure from the electricity meter: green = running, grey = off,
+    amber = unknown (no meter reading in the last 30 min). Each unit is the main load of its phase (L1 right, L3 left)."""
+    import plotly.graph_objects as go
+    from pfal_twin import tuya_meter as TM
+    el = electricity()
+    known = el is not None and not el["stale"]
+    status = TM.ac_status({p: el["phases"][p] * 1000 for p in "ac"} if known else {})
+    eq = tw.equipment_inside.set_index("name")
+    xs, ys, zs, texts = [], [], [], []
+    for ph, a in status.items():
+        if a["name"] not in eq.index:
+            continue
+        r = eq.loc[a["name"]]
+        colour, label = (("#2e9d57", f"แอร์{a['side']} · ทำงาน {a['kw']:.2f} kW") if a["on"] else
+                         ("#9a958a", f"แอร์{a['side']} · ปิด") if a["on"] is False else ("#d9a441", f"แอร์{a['side']} · ไม่ทราบสถานะ"))
+        d = 0.04
+        fig.add_trace(viz_box(r.x0 - d, r.x1 + d, r.y0 - d, r.y1 + d, r.z0 - d, r.z1 + d, colour, label, ph))
+        xs.append((r.x0 + r.x1) / 2); ys.append(r.y0 - 0.1); zs.append(r.z1 + 0.18); texts.append(label)
+    if xs:
+        fig.add_trace(go.Scatter3d(x=xs, y=ys, z=zs, mode="text", text=texts, textfont=dict(size=13, color="#22201c"),
+                                   hoverinfo="skip", showlegend=False))
+
+
+def viz_box(x0, x1, y0, y1, z0, z1, colour, label, ph):
+    from pfal_twin import viz
+    from pfal_twin.tuya_meter import PHASES
+    m = viz.box_mesh(x0, x1, y0, y1, z0, z1, color=colour, opacity=0.75, name=label)
+    m.update(hovertext=f"<b>{label}</b><br>เฟส {PHASES[ph]['line']}: {PHASES[ph]['loads']}", hoverinfo="text", showlegend=False)
+    return m
 
 
 def add_plants(fig) -> bool:
@@ -805,6 +837,7 @@ btn.onclick = async () => {
             state, _, _ = dash_state()
             fig = tw.figure_3d(var="T", st=state, cmin=20, cmax=35, height=660, title_prefix="", public=True)
             add_plants(fig)
+            add_ac_status(fig)
             fig.update_layout(title=dict(text="ห้องปลูก 3 มิติ · ต้นพืชตามบันทึกรอบปลูก · สีชั้นปลูก = อุณหภูมิห้อง", x=0.5, xanchor="center",
                                          font=dict(size=17)),
                               showlegend=False, margin=dict(l=0, r=0, t=40, b=0), width=CENTRE_W, autosize=False,
@@ -856,6 +889,7 @@ elif page == "Live":
         show_plants = c[1].toggle("แสดงต้นพืช · plants", value=True)
         lo, hi = RANGES[var]
         fig = tw.figure_3d(var=var, st=state, cmin=lo, cmax=hi, height=620, title_prefix="LIVE ", public=not extended)
+        add_ac_status(fig)
         if show_plants:
             if add_plants(fig):
                 fig.update_layout(legend=dict(orientation="h", yanchor="top", y=-0.02, xanchor="left", x=0, font=dict(size=11)),

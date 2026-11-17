@@ -223,3 +223,18 @@ def phase_daily_energy(hist: pd.DataFrame, daily: pd.Series | None = None, max_g
     share = per_day.div(per_day.sum(axis=1), axis=0)
     scaled = share.mul(daily.reindex(per_day.index), axis=0)
     return scaled.where(scaled.notna(), per_day)
+
+
+# The two split-type indoor units on the Y=W wall (layout.py), named as in the room: left / right when facing them
+# (from inside the room, looking towards +Y, the larger X is on the right). Each is the only big load on its phase.
+AC_UNITS = {"a": dict(name="AC indoor unit 1", side="ขวา"), "c": dict(name="AC indoor unit 2", side="ซ้าย")}
+AC_ON_W = 400          # phase power above this = the AC compressor runs (sockets / room light alone stay well below)
+
+
+def ac_status(phase_w: dict) -> dict:
+    """{'a': {'on': True, 'kw': 1.3, ...}, 'c': {...}} from per-phase power in W (nan -> on is None)."""
+    out = {}
+    for ph, u in AC_UNITS.items():
+        w = phase_w.get(ph, float("nan"))
+        out[ph] = dict(u, kw=w / 1000, on=None if w != w else bool(w > AC_ON_W))
+    return out
