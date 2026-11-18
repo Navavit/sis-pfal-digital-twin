@@ -34,3 +34,4 @@ docs/*
 !docs/DATA_DICTIONARY.md
 .streamlit/tuya_token.json
 data/raw/meter/
+data/backup/

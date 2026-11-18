@@ -5,7 +5,9 @@ Every 10 min: renew the Tuya token ahead of time and store one electricity-meter
 Every hour:   pull new ThingsBoard telemetry into the local store and publish it to the database (update_store.py +
               publish_db.py, the same steps GitHub Actions runs), and copy the meter readings to branch `meter` on
               GitHub for the web app on Streamlit Cloud, which the database refuses.
-A reading that cannot reach the database waits in data/raw/meter/pending.jsonl and goes in with the next one.
+A reading that cannot reach the database waits in data/raw/meter/pending.jsonl and goes in with the next one; every
+reading is also kept in data/raw/meter/readings.csv, so the `meter` branch stays current while the database is down
+(e.g. the server move of Nov 2026).
 
 Runs under launchd (scripts/install_collector.sh); by hand:  .venv/bin/python scripts/collector.py [--once]
 It keeps the Mac awake while it runs (caffeinate; keep the Mac on mains power with the lid open). If the Tuya login is
@@ -28,6 +30,7 @@ from pfal_twin.sqlapi import SqlApi  # noqa: E402
 
 METER_EVERY, STORE_EVERY = 600, 3600
 PENDING = ROOT / "data" / "raw" / "meter" / "pending.jsonl"
+LOG = ROOT / "data" / "raw" / "meter" / "readings.csv"       # every reading, kept here whatever the database does
 LOCK = ROOT / "data" / "raw" / "meter" / "collector.lock"   # one collector at a time: two would renew the token in turn
 
 
@@ -68,10 +71,31 @@ def meter_once(db: SqlApi, meter):
             log(f"{n} waiting meter rows stored")
         return None
     now = pd.Timestamp.now(tz=T.TZ).floor("s")
-    n = flush(db, [{"ts": now.isoformat(), "device": T.DEVICE, "key": k, "value": v} for k, v in r.items()])
+    rows = [{"ts": now.isoformat(), "device": T.DEVICE, "key": k, "value": v} for k, v in r.items()]
+    append_log(rows)
+    n = flush(db, rows)
     log(f"meter {r.get('power', float('nan')):.0f} W, {r.get('energy', float('nan')):.2f} kWh, token {meter.token_left_s / 60:.0f} min left"
         + (f" -> {n} rows stored" if n else ""))
     return meter
+
+
+def append_log(rows: list[dict]):
+    """Local record of every reading (CSV, long format): the meter backup is built from it when the database is down."""
+    LOG.parent.mkdir(parents=True, exist_ok=True)
+    new = not LOG.exists()
+    with LOG.open("a") as f:
+        if new:
+            f.write("ts,device,key,value\n")
+        f.writelines(f"{r['ts']},{r['device']},{r['key']},{r['value']}\n" for r in rows)
+
+
+def local_readings() -> pd.DataFrame:
+    """The local record as a wide table (index ts, one column per metric), like dbstore.pull_device."""
+    if not LOG.exists():
+        return pd.DataFrame(columns=T.METRICS, index=pd.DatetimeIndex([], tz=T.TZ), dtype=float)
+    d = pd.read_csv(LOG)
+    d["ts"] = pd.to_datetime(d["ts"], utc=True).dt.tz_convert(T.TZ)
+    return d.pivot_table(index="ts", columns="key", values="value", aggfunc="last").reindex(columns=T.METRICS)
 
 
 def store_once():
@@ -87,7 +111,14 @@ def publish_meter_backup(db: SqlApi, days: int = 120):
     """Meter readings of the last `days` -> pm.parquet on branch `meter` (one commit, force-pushed: the repository does
     not grow)."""
     import tempfile
-    df = dbstore.pull_device(db, T.DEVICE, T.METRICS, since=pd.Timestamp.now(tz=T.TZ) - pd.Timedelta(days=days))
+    since = pd.Timestamp.now(tz=T.TZ) - pd.Timedelta(days=days)
+    try:
+        df = dbstore.pull_device(db, T.DEVICE, T.METRICS, since=since)
+    except Exception:                        # database down (e.g. the server move): the local record alone
+        df = pd.DataFrame(columns=T.METRICS, index=pd.DatetimeIndex([], tz=T.TZ), dtype=float)
+    loc = local_readings()
+    df = df.combine_first(loc[loc.index >= since]).sort_index()
+    df = df[~df.index.duplicated(keep="first")]
     url = subprocess.run(["git", "remote", "get-url", "origin"], cwd=ROOT, capture_output=True, text=True).stdout.strip()
     with tempfile.TemporaryDirectory() as tmp:
         df.to_parquet(Path(tmp) / T.BACKUP_FILE)
