@@ -1,6 +1,6 @@
 # SIS PFAL — data dictionary
 
-Store: `iot_10min.parquet` (one row per 10-min bin, time index Asia/Bangkok, columns `device.key`) and `thingsboard_long.parquet` (raw samples: `ts, device, key, value`). The primary copy is the SIS PFAL SQL database (tables `iot_10min`, `iot_long`), updated every hour; a backup of both files is kept on branch `data`: https://github.com/Navavit/sis-pfal-digital-twin/tree/data. Electricity-meter readings (device `pm`, below) are in `iot_long` only (backup: branch `meter`, `pm.parquet`)
+Store: `iot_10min.parquet` (one row per 10-min bin, time index Asia/Bangkok, columns `device.key`) and `thingsboard_long.parquet` (raw samples: `ts, device, key, value`). The primary copy is the SIS PFAL SQL database (tables `iot_10min`, `iot_long`), updated every hour; a backup of both files is kept on branch `data`: https://github.com/Navavit/sis-pfal-digital-twin/tree/data. Electricity-meter readings (device `pm`, below) are stored the same way
 
 Coverage when this page was last updated (17 Nov 2026): 2025-12-26 → 2026-11-17, 46,945 bins, 95 columns (the store keeps growing; the web app shows the current span).
 
@@ -12,11 +12,11 @@ Coverage when this page was last updated (17 Nov 2026): 2025-12-26 → 2026-11-1
 | `gc1` | Grow Controller Plus at the rack END — growing-stage loop, 200 L tank, tiers 2–5 |
 | `gc2` | Grow Controller Plus at the rack SIDE — nursery-2 dosing set, 100 L tank |
 | `co2` | CO₂ & environment controller |
-| `pm` | 3-phase smart breaker / electricity meter on the PFAL supply (Tuya, from 13 Nov 2026) — **not in ThingsBoard**: raw samples only (`iot_long`, device `pm`), one reading per data update, see below |
+| `pm` | 3-phase electricity meter on the room's supply (Tuya, CTs on the mains; from 17 Nov 2026) — not in ThingsBoard, read by the collector; columns `pm.*`, see below |
 
-## Electricity meter `pm` (database table `iot_long`, not in the 10-min table)
+## Electricity meter `pm`
 
-Read by `scripts/read_meter.py` at every data update (GitHub Actions) through the Tuya device-sharing API (`pfal_twin/tuya_meter.py`); the web app also reads it live once a minute.
+Read every 10 min by `scripts/collector.py` through the Tuya device-sharing API (`pfal_twin/tuya_meter.py`) and kept with the sensors: raw readings are device `pm` in the raw store (`thingsboard_long.parquet`, database `iot_long`), and the 10-min table has them as columns `pm.<metric>` (10-min means; database columns `pm_<metric>`). They reach the database and branch `data` every hour, from 17 Nov 2026.
 
 | metric | meaning |
 |---|---|
