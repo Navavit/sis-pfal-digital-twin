@@ -8,11 +8,13 @@ Every hour:   pull new ThingsBoard telemetry into the local store and publish it
 A reading that cannot reach the database waits in data/raw/meter/pending.jsonl and goes in with the next one.
 
 Runs under launchd (scripts/install_collector.sh); by hand:  .venv/bin/python scripts/collector.py [--once]
-If the Tuya login is lost (the Mac off for more than ~2 h), it logs that and keeps trying with whatever token
+It keeps the Mac awake while it runs (caffeinate; keep the Mac on mains power with the lid open). If the Tuya login is
+lost anyway (the Mac off or asleep for more than ~2 h), it logs that and keeps trying with whatever token
 scripts/tuya_login.py saves next - scan the QR once more and it carries on by itself.
 """
 import fcntl
 import json
+import os
 import subprocess
 import sys
 import time
@@ -61,6 +63,9 @@ def meter_once(db: SqlApi, meter):
         r = meter.read()
     except Exception as e:
         log(f"meter: {str(e)[:120]} - if the login was lost: .venv/bin/python scripts/tuya_login.py (scan the QR)")
+        n = flush(db, [])                    # readings kept while the database was down still go in
+        if n:
+            log(f"{n} waiting meter rows stored")
         return None
     now = pd.Timestamp.now(tz=T.TZ).floor("s")
     n = flush(db, [{"ts": now.isoformat(), "device": T.DEVICE, "key": k, "value": v} for k, v in r.items()])
@@ -106,6 +111,10 @@ def main():
             if "--once" in sys.argv:
                 sys.exit("another collector is running")
             time.sleep(300)
+    # Keep the Mac awake while the collector runs: asleep, nothing renews the Tuya token (it lives 2 h) and the login is
+    # lost. caffeinate -i (no idle sleep) -s (no system sleep on mains power) ends with this process. A closed lid on
+    # battery still sleeps.
+    subprocess.Popen(["caffeinate", "-i", "-s", "-w", str(os.getpid())])
     db = SqlApi.from_secrets(read_only=False)
     meter, next_store = None, 0.0
     while True:
