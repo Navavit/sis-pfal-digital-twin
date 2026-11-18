@@ -25,8 +25,8 @@ sys.path.insert(0, str(ROOT))
 # is already loaded (version mismatch), drop it and re-import.
 import os  # noqa: E402
 os.environ["PYTHONPATH"] = str(ROOT) + os.pathsep + os.environ.get("PYTHONPATH", "")
-NEEDS_PKG = "2026.11.17.6"
-APP_BUILD = "2026-11-17 k"          # shown in the footer so everyone can tell which version is running
+NEEDS_PKG = "2026.11.18.1"
+APP_BUILD = "2026-11-18 a"          # shown in the footer so everyone can tell which version is running
 import pfal_twin  # noqa: E402
 if getattr(pfal_twin, "__version__", "") != NEEDS_PKG:
     for _m in [m for m in sys.modules if m == "pfal_twin" or m.startswith("pfal_twin.")]:
@@ -211,11 +211,12 @@ def availability_figure(version: str):
     w = get_twin(version, NEEDS_PKG, id(DigitalTwin)).data
     w = w[[c for c in w.columns if c.split(".", 1)[1] not in tb.CONTROL_KEYS]]     # measured keys only (control keys are forward-filled)
     av = tb.availability(w, "1D")
-    order = [d for d in ("gw", "gc1", "gc2", "co2") if d in av.columns]
-    label = {"gw": "gw — XY-MD02 T/RH ×5", "gc1": "gc1 — growing controller", "gc2": "gc2 — nursery-2 controller", "co2": "co2 — CO₂ controller"}
+    order = [d for d in ("gw", "gc1", "gc2", "co2", "pm") if d in av.columns]
+    label = {"gw": "gw — XY-MD02 T/RH ×5", "gc1": "gc1 — growing controller", "gc2": "gc2 — nursery-2 controller", "co2": "co2 — CO₂ controller",
+             "pm": "pm — electricity meter"}
     fig = go.Figure(go.Heatmap(z=av[order].T.values * 100, x=av.index, y=[label[d] for d in order], colorscale=[[0, "#f2f2f2"], [0.01, "#fde0c8"], [1, "#1f6f6b"]],
                                zmin=0, zmax=100, colorbar=dict(title="% of day", thickness=12, len=0.9), hovertemplate="%{y}<br>%{x|%d %b %Y}: %{z:.0f} % of the day<extra></extra>"))
-    fig.update_layout(height=190, margin=dict(l=10, r=10, t=10, b=30), yaxis=dict(autorange="reversed"), font=dict(size=11))
+    fig.update_layout(height=40 + 32 * len(order), margin=dict(l=10, r=10, t=10, b=30), yaxis=dict(autorange="reversed"), font=dict(size=11))
     return fig
 
 
@@ -274,35 +275,22 @@ def plant_meshes(_nonce: int, day: str) -> list:
     return plants3d.plant_traces(plants3d.plant_table(planting_rounds(_nonce), holes, day))
 
 
-@st.cache_data(ttl=120, show_spinner=False, max_entries=2)
-def meter_history(_nonce: int, days: int = 120) -> pd.DataFrame:
-    """Meter readings in the database, stored every 10 min by the collector (scripts/collector.py). The web app does
-    not read the meter itself: the Tuya login must have a single owner, or token renewals clash."""
-    from pfal_twin import dbstore, tuya_meter as TM
-    from pfal_twin.sqlapi import SqlApi
-    since = pd.Timestamp.now(tz=TZ) - pd.Timedelta(days=days)
-    try:
-        return dbstore.pull_device(SqlApi.from_secrets(), "pm", ["energy", "power", "power_a", "power_b", "power_c"], since=since)
-    except Exception:              # database unreachable from here: the hourly copy on branch `meter`
-        import io
-        import requests
-        r = requests.get(TM.BACKUP_URL, timeout=30)
-        r.raise_for_status()
-        df = pd.read_parquet(io.BytesIO(r.content))
-        return df[df.index >= since]
+def meter_history() -> pd.DataFrame:
+    """Electricity-meter columns of the store (pm.*, 10-min bins) - the meter is kept with the sensors: the collector
+    merges its readings into the raw store every hour (scripts/collector.py), so it reaches the database, branch `data`
+    and this app the same way. Columns renamed to the meter's metric names (energy, power, power_a ...)."""
+    cols = {f"pm.{m}": m for m in ("energy", "power", "power_a", "power_b", "power_c")}
+    return tw.data.reindex(columns=list(cols)).rename(columns=cols).dropna(how="all")
 
 
-METER_STALE = pd.Timedelta("30min")
+METER_STALE = pd.Timedelta("100min")   # readings reach the store every hour (+ the app's 10-min sync)
 
 
 def electricity() -> dict | None:
     """Latest meter reading: power (kW, per phase), energy today (kWh) and its estimated cost, and how old it is.
     None when the database cannot be read or holds no reading yet."""
     from pfal_twin import tuya_meter as TM
-    try:
-        hist = meter_history(int(time.time() // 120))
-    except Exception:
-        return None
+    hist = meter_history()
     last = hist.dropna(subset=["power"]).tail(1)
     if last.empty:
         return None
@@ -320,8 +308,8 @@ def meter_warning(el: dict | None) -> str | None:
     """Text for a banner when the meter has gone quiet (the collector stopped or the Tuya login was lost)."""
     if el is None or not el["stale"]:
         return None
-    return (f"มิเตอร์ไฟฟ้าไม่ได้ส่งค่ามา {age_text(el['age'])} (ล่าสุด {el['t']:%d %b %H:%M}) · ตัวเก็บข้อมูลอาจหยุด "
-            "หรือการล็อกอิน Tuya หลุด ถ้าเกิน 2 ชั่วโมงต้องสแกน QR ใหม่: scripts/tuya_login.py")
+    return (f"ไม่มีค่ามิเตอร์ไฟฟ้าใหม่มา {age_text(el['age'])} (ล่าสุด {el['t']:%d %b %H:%M}; ปกติเข้าคลังข้อมูลทุกชั่วโมง) · "
+            "ตัวเก็บข้อมูลอาจหยุด หรือการล็อกอิน Tuya หลุด ถ้าเกิน 2 ชั่วโมงต้องสแกน QR ใหม่: scripts/tuya_login.py")
 
 
 def power_frame(hist: pd.DataFrame, t0, t1, freq: str | None = None) -> pd.DataFrame:
@@ -389,14 +377,20 @@ def sustained_alerts(minutes: int = 60) -> list[str]:
     return out
 
 
-def add_ac_status(fig):
+def add_ac_status(fig, at=None):
     """Mark the two AC indoor units in a 3-D twin figure from the electricity meter: green = running, grey = off,
     amber = unknown (no meter reading in the last 30 min). Each unit is the main load of its phase (L1 right, L3 left)."""
     import plotly.graph_objects as go
     from pfal_twin import tuya_meter as TM
-    el = electricity()
-    known = el is not None and not el["stale"]
-    status = TM.ac_status({p: el["phases"][p] * 1000 for p in "ac"} if known else {})
+    if at is None:                             # now: the latest reading, if it is recent
+        el = electricity()
+        known = el is not None and not el["stale"]
+        phase_w = {p: el["phases"][p] * 1000 for p in "ac"} if known else {}
+    else:                                      # a moment in the past (History cursor): the 10-min bin at or just before it
+        h = meter_history()
+        h = h[(h.index <= pd.Timestamp(at)) & (h.index > pd.Timestamp(at) - pd.Timedelta("30min"))].dropna(subset=["power"])
+        phase_w = {p: h[f"power_{p}"].iloc[-1] for p in "ac"} if len(h) else {}
+    status = TM.ac_status(phase_w)
     eq = tw.equipment_inside.set_index("name")
     xs, ys, zs, texts = [], [], [], []
     for ph, a in status.items():
@@ -981,7 +975,7 @@ elif page == "Live":
             c[4].metric("วันนี้ · today", fmt(el["today_kwh"], 1, " kWh"),
                         f"≈ {el['today_thb']:,.0f} บาท ({tw.params.thb_per_kwh:g} บาท/kWh)" if el["today_kwh"] == el["today_kwh"] else None,
                         delta_color="off")
-            st.caption(f"มิเตอร์ไฟฟ้า 3 เฟส · ค่า ณ {el['t']:%H:%M} (อ่านทุก 10 นาที) · ค่าไฟประมาณจาก {tw.params.thb_per_kwh:g} บาท/kWh")
+            st.caption(f"มิเตอร์ไฟฟ้า 3 เฟส · ค่าเฉลี่ย 10 นาทีของช่วง {el['t']:%H:%M} น. (ค่าเข้าคลังข้อมูลทุกชั่วโมง) · ค่าไฟประมาณจาก {tw.params.thb_per_kwh:g} บาท/kWh")
 
         # ---- charts (same window and 5-min averaging as the ThingsBoard dashboard)
         try:
@@ -1150,13 +1144,15 @@ elif page == "History":
         full = days[days.index < pd.Timestamp.now(tz=TZ).normalize()]          # today is not complete yet
         avg = f"mean {full.mean():.1f} kWh/day (≈ {full.mean() * rate:,.0f} บาท) · " if len(full) else ""
         st.caption(f"{avg}selected dates {days.sum():.1f} kWh ≈ {days.sum() * rate:,.0f} บาท at {rate:g} บาท/kWh · "
-                   "daily kWh from the meter's counter, split by each phase's power (readings every 10 min, from 17 Nov 2026)")
+                   "daily kWh from the meter's counter, split by each phase's power (10-min means, from 17 Nov 2026)")
     else:
         st.caption("Electricity: no meter reading in the selected dates (readings from 17 Nov 2026)")
 
     with st.expander(f"3-D twin at the cursor — {state.time:%Y-%m-%d %H:%M} (same view as Live, but for that moment)"):
         var = colour_picker("var_hist"); lo, hi = RANGES[var]
-        st.plotly_chart(tw.figure_3d(var=var, st=state, cmin=lo, cmax=hi, height=600, public=not extended), **PLOTLY, key=f"hist3d_{var}")
+        fig_h = tw.figure_3d(var=var, st=state, cmin=lo, cmax=hi, height=600, public=not extended)
+        add_ac_status(fig_h, at=state.time)
+        st.plotly_chart(fig_h, **PLOTLY, key=f"hist3d_{var}")
         with st.expander(f"values at {state.time:%Y-%m-%d %H:%M} as cards"):
             state_cards(state, row=hist.loc[state.time] if state.time in hist.index else None)
     t1, t2, t3 = st.tabs(["KPI per channel (whole store)", "Events", "Heat-map (whole store)"])

@@ -38,10 +38,8 @@ TZ = "Asia/Bangkok"
 ENERGY_PER_COUNT = 0.01           # kWh per count of total_forward_energy
 METRICS = ["power", "power_a", "power_b", "power_c", "voltage_a", "voltage_b", "voltage_c", "current_a", "current_b",
            "current_c", "energy", "temp", "leakage", "fault", "switch"]
-# Backup of the readings for servers the database refuses (Streamlit Cloud): branch `meter`, one file, force-pushed
-# by the collector every hour (like the `data` branch for the sensors).
-BACKUP_FILE = "pm.parquet"
-BACKUP_URL = f"https://raw.githubusercontent.com/Navavit/sis-pfal-digital-twin/meter/{BACKUP_FILE}"
+# Readings are kept with the sensors: scripts/collector.py merges them into the raw store every hour, so they become
+# pm.* columns of the 10-min table and reach the database and branch `data` like everything else.
 # What each phase feeds (PFAL panel, breaker numbers; team, 17 Nov 2026). Breakers 19/21/23 only feed the meter's voltage
 # inputs (V1-V3); its CTs read the whole panel (the LED circuit 22 and the AC on 18/20 show up in its phases).
 # Left / right = facing the two indoor AC units: with only the right one running, L1 read 1.3 kW and L3 ~0 (17 Nov).
