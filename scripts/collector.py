@@ -29,7 +29,7 @@ import pandas as pd  # noqa: E402
 from pfal_twin import store, thingsboard as tb, tuya_meter as T  # noqa: E402
 from pfal_twin.sqlapi import SqlApi  # noqa: E402
 
-METER_EVERY, STORE_EVERY = 600, 3600
+METER_EVERY, STORE_EVERY, RETRY = 600, 3600, 60     # RETRY: after a failed meter read or push (e.g. Wi-Fi not up yet after a wake)
 LOG = ROOT / "data" / "raw" / "meter" / "readings.csv"       # every reading, until it is merged into the raw store
 PENDING = ROOT / "data" / "raw" / "meter" / "pending.jsonl"  # left over from the earlier collector: merged once
 LOCK = ROOT / "data" / "raw" / "meter" / "collector.lock"   # one collector at a time: two would renew the token in turn
@@ -95,7 +95,7 @@ def run(script: str) -> bool:
     return p.returncode == 0
 
 
-def push_data_branch():
+def push_data_branch() -> bool:
     """The store files -> branch `data` (one commit, force-pushed: the repository does not grow), as GitHub Actions does."""
     url = subprocess.run(["git", "remote", "get-url", "origin"], cwd=ROOT, capture_output=True, text=True).stdout.strip()
     with tempfile.TemporaryDirectory() as tmp:
@@ -109,15 +109,37 @@ def push_data_branch():
             "commit", "-q", "-m", f"store {pd.Timestamp.now(tz='UTC'):%Y-%m-%dT%H:%MZ} (collector)")
         p = git("push", "-q", "--force", url, "data")
     log("branch data: pushed" if p.returncode == 0 else f"branch data FAILED: {p.stderr.strip()[-160:]}")
+    return p.returncode == 0
 
 
-def store_once():
+def attempt(step, *args) -> bool:
+    """Run one step; an exception (a timeout, a dropped connection) counts as a failure instead of ending the collector."""
+    try:
+        return bool(step(*args))
+    except Exception as e:
+        log(f"{step.__name__}: {str(e)[:120]}")
+        return False
+
+
+def store_once() -> set:
+    """Hourly update. Returns the steps that failed, for retry_failed() (the whole cycle, or just an upload)."""
     n = merge_readings()
     if n:
         log(f"{n} meter rows merged into the store")
-    if run("update_store.py"):
-        push_data_branch()
-        run("publish_db.py")              # may fail while the database is down: it re-sends what it lacks next time
+    if not attempt(run, "update_store.py"):
+        return {"store"}
+    return {name for name, ok in (("push", attempt(push_data_branch)), ("db", attempt(run, "publish_db.py"))) if not ok}
+
+
+def retry_failed(failed: set) -> set:
+    if "store" in failed:
+        return store_once()
+    left = set()
+    if "push" in failed and not attempt(push_data_branch):
+        left.add("push")
+    if "db" in failed and not attempt(run, "publish_db.py"):
+        left.add("db")
+    return left
 
 
 def main():
@@ -136,16 +158,22 @@ def main():
     # battery still sleeps.
     subprocess.Popen(["caffeinate", "-i", "-s", "-w", str(os.getpid())])
     db = SqlApi.from_secrets(read_only=False)
-    meter, next_store = None, 0.0
+    meter, next_store, next_meter, failed, next_retry = None, 0.0, 0.0, set(), 0.0
     while True:
         t0 = time.time()
-        meter = meter_once(db, meter)
+        if t0 >= next_meter:
+            meter = meter_once(db, meter)
+            next_meter = t0 + (METER_EVERY if meter is not None else RETRY)
         if t0 >= next_store:
-            store_once()
+            failed = store_once()
             next_store = t0 + STORE_EVERY
+            next_retry = t0 + RETRY
+        elif failed and t0 >= next_retry:
+            failed = retry_failed(failed)
+            next_retry = t0 + (RETRY if failed - {"db"} else METER_EVERY)      # the database alone: it may be down for days
         if "--once" in sys.argv:
             return
-        time.sleep(max(30, METER_EVERY - (time.time() - t0)))
+        time.sleep(20)                        # short naps: wall-clock due times are noticed soon after the Mac wakes
 
 
 if __name__ == "__main__":
