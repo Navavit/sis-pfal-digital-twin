@@ -25,8 +25,8 @@ sys.path.insert(0, str(ROOT))
 # is already loaded (version mismatch), drop it and re-import.
 import os  # noqa: E402
 os.environ["PYTHONPATH"] = str(ROOT) + os.pathsep + os.environ.get("PYTHONPATH", "")
-NEEDS_PKG = "2026.11.18.1"
-APP_BUILD = "2026-11-18 a"          # shown in the footer so everyone can tell which version is running
+NEEDS_PKG = "2026.11.24.1"
+APP_BUILD = "2026-11-24 a"          # shown in the footer so everyone can tell which version is running
 import pfal_twin  # noqa: E402
 if getattr(pfal_twin, "__version__", "") != NEEDS_PKG:
     for _m in [m for m in sys.modules if m == "pfal_twin" or m.startswith("pfal_twin.")]:
@@ -445,6 +445,8 @@ def tray_map_html(grid: pd.DataFrame) -> str:
                 tds += f"<td style='{cell};background:#ffffff;color:#a19c90'>ว่าง</td>"
                 continue
             left = "" if r.days_left is None else ("ถึงกำหนดเก็บ" if r.days_left <= 0 else f"อีก {r.days_left:.0f} วัน")
+            if left and "ไม่ทราบรอบ" in r["round"]:      # sowing round unknown: harvest date is an estimate
+                left = "≈ " + left
             if r.n > 1:
                 tds += f"<td style='{cell};background:#f4cccc;border:2px solid #c0392b' title='{r['round']}'><b>⚠ ข้อมูลชนกัน</b><br>{r.crop}</td>"
             else:
@@ -471,7 +473,7 @@ def planting_section():
     m[2].metric("ชนิดพืช · crops", len({c for cs in grid.crop if cs for c in cs.split(" / ")}))
     st.markdown(tray_map_html(grid), unsafe_allow_html=True)
     st.caption(f"จากบันทึกรอบปลูกของทีม ([PFAL รอบปลูก]({planting.SHEET_URL})) อัปเดตทุก 10 นาที · ชั้น 1 (เพาะกล้า) ไม่แสดง · "
-               "1 ถาด = 18 หลุม (6 × 3), ชั้นละ 10 ถาด · วันเก็บเป็นค่าคาดตามชนิดพืช")
+               "1 ถาด = 18 หลุม (6 × 3), ชั้นละ 10 ถาด · วันเก็บเป็นค่าคาดตามชนิดพืช (≈ = ไม่ทราบรอบเพาะ)")
 
 
 def fmt(v, nd=1, unit=""):

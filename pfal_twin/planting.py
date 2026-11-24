@@ -21,7 +21,7 @@ TZ = "Asia/Bangkok"
 TIERS = (2, 3, 4, 5)
 TRAYS = 10              # per tier; tray 1 = door side, tray 10 = far side
 HOLES_PER_TRAY = 18     # 6 x 3 -> 180 holes per tier, 720 on tiers 2-5
-DATES = ["sown", "on_tray", "off_tray", "harvest_plan", "harvest_actual"]
+DATES = ["sown", "on_tray", "off_tray", "harvest_plan", "harvest_actual", "transplanted"]
 INTS = ["tier", "tray_from", "tray_to", "holes"]
 
 
@@ -37,6 +37,7 @@ def load(url: str = CSV_URL, timeout: int = 20) -> pd.DataFrame:
         df[c] = pd.to_datetime(df.get(c), format="%Y-%m-%d", errors="coerce")
     for c in INTS:
         df[c] = pd.to_numeric(df.get(c), errors="coerce").astype("Int64")
+    df["transplanted"] = df["transplanted"].fillna(df["on_tray"])   # on_tray = in this position since; differs after a move between tiers
     df = df[df["crop"].notna() & df["tier"].isin(TIERS)]
     return df.reset_index(drop=True)
 
@@ -60,6 +61,7 @@ def upcoming_harvests(rounds: pd.DataFrame, day=None, days: int = 21) -> pd.Data
     """Blocks still on the tiers whose planned harvest is within `days` (or overdue), soonest first."""
     day = pd.Timestamp(day if day is not None else pd.Timestamp.now(tz=TZ).date()).normalize()
     b = rounds[rounds["harvest_actual"].isna() & rounds["harvest_plan"].notna() & (rounds["on_tray"] <= day)
+               & ~(rounds["off_tray"] < rounds["harvest_plan"])          # moved or discarded before harvest
                & (rounds["harvest_plan"] <= day + pd.Timedelta(days=days))].copy()
     b["days_left"] = (b["harvest_plan"] - day).dt.days
     return b.sort_values(["harvest_plan", "tier", "tray_from"])

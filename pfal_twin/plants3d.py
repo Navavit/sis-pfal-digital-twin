@@ -245,7 +245,7 @@ def plant_mesh(x, y, z, sty: dict, size: float, rng: np.random.Generator):
 
 # ---------------------------------------------------------------------------------------------------- planting log -> meshes
 def plant_table(rounds: pd.DataFrame, holes: pd.DataFrame, day=None, trays_per_tier: int = 10) -> pd.DataFrame:
-    """One row per occupied hole on `day`: position, crop, round, growth fraction (days on tier / planned days)."""
+    """One row per occupied hole on `day`: position, crop, round, growth fraction (days since transplant / planned days)."""
     day = pd.Timestamp(day if day is not None else pd.Timestamp.now(tz="Asia/Bangkok").date()).normalize()
     cols = holes["col"].max() + 1
     holes = holes.assign(tray=holes["col"] // (cols // trays_per_tier) + 1)      # tray 1 = door end (x0)
@@ -253,8 +253,10 @@ def plant_table(rounds: pd.DataFrame, holes: pd.DataFrame, day=None, trays_per_t
     out = []
     for b in on.itertuples():
         h = holes[(holes["tier"] == b.tier) & holes["tray"].between(b.tray_from, b.tray_to)]
-        span = max((b.off_tray - b.on_tray).days, 1)
-        grow = float(np.clip((day - b.on_tray).days / span, 0.0, 1.0))
+        t0 = getattr(b, "transplanted", pd.NaT)                  # a block moved to another tier keeps its original transplant date
+        t0 = b.on_tray if pd.isna(t0) else t0
+        end = b.harvest_plan if pd.notna(b.harvest_plan) else b.off_tray
+        grow = float(np.clip((day - t0).days / max((end - t0).days, 1), 0.0, 1.0))
         left = (b.harvest_plan - day).days if pd.notna(b.harvest_plan) else None
         out.append(h.assign(crop=b.crop, round=b.round, grow=grow, days_left=left,
                             harvest=b.harvest_plan.strftime("%d %b %Y") if pd.notna(b.harvest_plan) else "?"))
