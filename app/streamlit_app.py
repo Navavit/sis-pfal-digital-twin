@@ -25,8 +25,8 @@ sys.path.insert(0, str(ROOT))
 # is already loaded (version mismatch), drop it and re-import.
 import os  # noqa: E402
 os.environ["PYTHONPATH"] = str(ROOT) + os.pathsep + os.environ.get("PYTHONPATH", "")
-NEEDS_PKG = "2026.11.24.1"
-APP_BUILD = "2026-11-24 a"          # shown in the footer so everyone can tell which version is running
+NEEDS_PKG = "2026.11.24.2"
+APP_BUILD = "2026-11-24 b"          # shown in the footer so everyone can tell which version is running
 import pfal_twin  # noqa: E402
 if getattr(pfal_twin, "__version__", "") != NEEDS_PKG:
     for _m in [m for m in sys.modules if m == "pfal_twin" or m.startswith("pfal_twin.")]:
@@ -1213,7 +1213,8 @@ elif page == "What-if":
 2. **% แต่ละชนิด** — เลื่อน slider ของทุกชนิดยกเว้นตัวสุดท้าย; **ตัวสุดท้ายรับส่วนที่เหลือให้ครบ 100 % เอง** (slider ถัดไปจะถูกจำกัดไว้ไม่ให้เกิน)
 3. **placement** — `blocks` = จัดเป็นบล็อกต่อเนื่อง ไล่ทีละชั้น (จัดการง่าย เก็บเกี่ยวทั้งบล็อก) · `per_tier` = ทุกชั้นมีสัดส่วนเหมือนกัน (กระจายความเสี่ยงต่อชั้น)
 4. **photoperiod** — ชั่วโมงเปิดไฟต่อวัน มีผลกับ DLI (แสงสะสมรายวัน) ที่ผักได้รับ
-5. ดูผล: **ภาพ 3-D** 1 จุด = 1 หลุม สีตามชนิดผัก (หมุน/ซูม/กดขยายได้ · คลิกชื่อใน legend เพื่อซ่อน/แสดง) และ **ตาราง** ด้านล่าง; ดาวน์โหลดผังรายหลุมเป็น CSV ได้
+5. **view / growth stage** — `3-D plants` = ต้นผักจริงตามชนิด 1 ต้นต่อ 1 หลุม เลื่อนดูได้ตั้งแต่เพิ่งย้ายปลูก (0 %) ถึงพร้อมเก็บ (100 %) · `markers` = 1 จุดต่อหลุม สีตามชนิด (ดูการแบ่งพื้นที่ชัดกว่า) · รูปทรงและขนาดต้นเป็นภาพประกอบ ไม่มีผลกับตัวเลขในตาราง
+6. ดูผล: **ภาพ 3-D** (หมุน/ซูม/กดขยายได้ · คลิกชื่อใน legend เพื่อซ่อน/แสดง) และ **ตาราง** ด้านล่าง; ดาวน์โหลดผังรายหลุมเป็น CSV ได้
 
 **อ่านตาราง** — `holes` จำนวนหลุม · `days_to_harvest` วันถึงเก็บเกี่ยว · `plant_fw_g` น้ำหนักสดต่อต้น · `kg_per_cycle` / `cycles_per_year` / `kg_per_year` ผลผลิต · `THB_per_year` รายได้ (ราคาในแคตตาล็อก) · `DLI_need` vs `DLI_available` แสงที่ต้องการ vs ที่โมเดลคำนวณได้ · `light_ok` = `yes` หรือขาดอีกกี่ mol/m²/d
 
@@ -1243,10 +1244,14 @@ elif page == "What-if":
                 st.warning("all shares are 0"); st.stop()
             policy = st.radio("placement", ["blocks", "per_tier"], horizontal=True, help="blocks = contiguous blocks tier by tier; per_tier = same mix on every tier")
             photoperiod = st.slider("photoperiod (h)", 10, 20, 16)
+            view = st.radio("view", ["3-D plants", "markers"], horizontal=True)
+            grow = st.slider("growth stage (%)", 0, 100, 100, step=10, disabled=view == "markers",
+                             help="0 = just transplanted, 100 = harvest size; illustrative, it does not change the numbers")
             st.caption("yields use the schematic crop catalogue and the modelled DLI — not calibrated yet")
         with c[1]:
             assign, summary, _ = tw.crop_mix(mix, policy=policy, photoperiod_h=photoperiod, view=None)
-            st.plotly_chart(tw.crop_mix_3d(assign, title=f"Crop mix — {', '.join(f'{k} {v:.0f} %' for k, v in mix.items())}"), **PLOTLY)
+            st.plotly_chart(tw.crop_mix_3d(assign, title=f"Crop mix: {', '.join(f'{k} {v:.0f} %' for k, v in mix.items())}",
+                                           plants=view == "3-D plants", grow=grow / 100), key="mix3d", **PLOTLY)
         st.dataframe(summary, width="stretch")
         st.download_button("download hole assignment (CSV)", assign.to_csv(index=False).encode(), file_name="crop_mix_assignment.csv", mime="text/csv")
     with tab_light:

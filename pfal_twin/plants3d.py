@@ -275,6 +275,11 @@ def _lighter(sty: dict, f: float) -> dict:
     return {**sty, "tubes": max(3, round(sty["tubes"] * f))}
 
 
+def mix_table(assign: pd.DataFrame, grow: float = 1.0) -> pd.DataFrame:
+    """What-if crop mix (models.allocate_holes) -> plants for plant_traces, all at growth fraction `grow` (1 = harvest size)."""
+    return assign[assign["crop"] != "empty"].assign(grow=float(np.clip(grow, 0.0, 1.0)))
+
+
 def plant_traces(plants: pd.DataFrame, seed: int = 7) -> list:
     """One Mesh3d per crop (so the legend lists crops); plants seeded by position so they look the same on every redraw."""
     traces = []
@@ -292,8 +297,9 @@ def plant_traces(plants: pd.DataFrame, seed: int = 7) -> list:
             X.append(vx); Y.append(vy); Z.append(vz); F.append(f + n); C.append(c); n += len(vx)
         F = np.concatenate(F)
         f32 = lambda a: np.concatenate(a).astype(np.float32)    # float32 halves what the browser downloads
-        hover = (f"<b>{crop}</b> · {len(g)} plants<br>round {', '.join(dict.fromkeys(g['round']))}<br>"
-                 f"tier {', '.join(str(t) for t in sorted(g['tier'].unique()))}<br>harvest (planned) {', '.join(dict.fromkeys(g['harvest']))}")
+        hover = f"<b>{crop}</b> · {len(g)} plants<br>tier {', '.join(str(t) for t in sorted(g['tier'].unique()))}"
+        if "round" in g:                                         # planting log; a what-if mix has no rounds
+            hover += f"<br>round {', '.join(dict.fromkeys(g['round']))}<br>harvest (planned) {', '.join(dict.fromkeys(g['harvest']))}"
         traces.append(go.Mesh3d(x=f32(X), y=f32(Y), z=f32(Z), i=F[:, 0], j=F[:, 1], k=F[:, 2],
                                 intensity=f32(C), cmin=0, cmax=1, colorscale=colorscale(sty), showscale=False,
                                 name=f"{crop} ({len(g)})", showlegend=True, hovertext=hover, hoverinfo="text",

@@ -568,8 +568,8 @@ class DigitalTwin:
             if path: fig.savefig(path, dpi=150, bbox_inches="tight")
         return assign, summary, fig
 
-    def crop_mix_3d(self, assign, title=None, pipes=False):
+    def crop_mix_3d(self, assign, title=None, pipes=False, plants=False, grow=1.0):
         base = viz.model_traces(self.model, tier_color="#e0e0e0", group_legend=True) + viz.equipment_traces(self.equipment_inside, opacity=0.12, group_legend=True)
         if pipes:
             base += H.pipe_traces(self.network, opacity=0.35)
-        return CV.rack_3d_holes(assign, self.model, base_traces=base, title=title)
+        return CV.rack_3d_holes(assign, self.model, base_traces=base, title=title, plants=plants, grow=grow)

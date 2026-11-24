@@ -32,12 +32,16 @@ def rack_plan_holes(assign, model, title="Crop mix — hole-by-hole plan of the 
     return fig
 
 
-def rack_3d_holes(assign, model, base_traces=None, title=None):
-    """Plotly 3-D: rack model + one marker per hole coloured by crop (legend per crop)."""
+def rack_3d_holes(assign, model, base_traces=None, title=None, plants=False, grow=1.0):
+    """Plotly 3-D: rack model + every hole, as a marker coloured by crop or (plants=True) as a 3-D plant at growth fraction
+    `grow`; legend per crop."""
     from .viz import model_traces, figure_3d
     tr = list(base_traces) if base_traces is not None else model_traces(model, tier_color="#e0e0e0")
-    for k, g in assign.groupby("crop"):
+    if plants:
+        from . import plants3d
+        tr += plants3d.plant_traces(plants3d.mix_table(assign, grow))
+    for k, g in () if plants else assign.groupby("crop"):
         tr.append(go.Scatter3d(x=g.x, y=g.y, z=g.z, mode="markers", name=f"{k} ({len(g)})",
                                marker=dict(size=4, color=CROPS[k]["color"], line=dict(color="#333", width=0.5)),
                                hovertext=[f"tier {r.tier} col {r.col} row {r.row}: {k}" for r in g.itertuples()], hoverinfo="text"))
-    return figure_3d(tr, title=title or "Crop mix on the growing tiers (one marker per hole)", height=720, compact=True)
+    return figure_3d(tr, title=title or "Crop mix on the growing tiers (one plant per hole)" if plants else "Crop mix on the growing tiers (one marker per hole)", height=720, compact=True)
