@@ -5,6 +5,10 @@ Needs [tuya] user_code (Tuya app: Me -> Settings -> Account and Security -> User
 stored in the SIS PFAL database; nothing secret is printed. Then lists the account's devices and the meter's readings.
 
     .venv/bin/python scripts/tuya_login.py
+    .venv/bin/python scripts/tuya_login.py --github   a separate login for GitHub Actions (update_data.yml reads the
+        meter there): the token goes straight into the repository secret TUYA_TOKEN_SEED (and a key TUYA_BOX_KEY is made
+        once) with the `gh` command line, logged in as someone who may set the repository's secrets. It does not touch
+        this computer's own login, so the two never renew the same token.
 """
 import subprocess
 import sys
@@ -44,6 +48,15 @@ for _ in range(60):
 else:
     sys.exit("no confirmation within 3 min: run the script again")
 png.unlink(missing_ok=True)
+
+if "--github" in sys.argv:                                # straight into the repository secrets, never on screen or disk
+    have = subprocess.run(["gh", "secret", "list"], capture_output=True, text=True).stdout
+    if "TUYA_BOX_KEY" not in have:
+        from cryptography.fernet import Fernet
+        subprocess.run(["gh", "secret", "set", "TUYA_BOX_KEY"], input=Fernet.generate_key().decode(), text=True, check=True)
+    import json
+    subprocess.run(["gh", "secret", "set", "TUYA_TOKEN_SEED"], input=json.dumps(info), text=True, check=True)
+    sys.exit("logged in for GitHub Actions: secrets TUYA_TOKEN_SEED (and TUYA_BOX_KEY) set - run the update-data workflow")
 
 db = SqlApi.from_secrets(read_only=False)
 in_db = T.save_token(db, info)

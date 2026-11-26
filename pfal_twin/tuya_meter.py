@@ -103,8 +103,7 @@ class TuyaMeter:
         class _Saver(SharingTokenListener):           # the SDK refreshes the access token itself; keep the new one
             def update_token(self, token_info: dict):
                 outer.info.update(token_info)
-                if outer.db is not None:
-                    save_token(outer.db, outer.info)
+                save_token(outer.db, outer.info)      # local copy always; the database too when there is one
 
         self.info, self.db, self.device_id = dict(info), db, device_id
         self.manager = Manager(CLIENT_ID, user_code, info["terminal_id"], info["endpoint"], info, _Saver())

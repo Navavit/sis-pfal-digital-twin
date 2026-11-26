@@ -33,7 +33,10 @@ from pfal_twin.sqlapi import SqlApi  # noqa: E402
 METER_EVERY, STORE_EVERY, RETRY = 600, 3600, 60     # RETRY: after a failed meter read or push (e.g. Wi-Fi not up yet after a wake)
 LOG = ROOT / "data" / "raw" / "meter" / "readings.csv"       # every reading, until it is merged into the raw store
 PENDING = ROOT / "data" / "raw" / "meter" / "pending.jsonl"  # left over from the earlier collector: merged once
-LOCK = ROOT / "data" / "raw" / "meter" / "collector.lock"   # one collector at a time: two would renew the token in turn
+LOCK = ROOT / "data" / "raw" / "meter" / "collector.lock"
+# While GitHub Actions also reads the meter and owns branch `data` (.github/workflows/update_data.yml), this file makes the
+# Mac skip its push so the two do not overwrite each other's store; the Mac still reads the meter and publishes the database.
+NO_PUSH = ROOT / "data" / "raw" / "meter" / "no_branch_push"   # one collector at a time: two would renew the token in turn
 # the store files published to branch `data` (as in .github/workflows/update_data.yml)
 DATA_FILES = ["data/raw/iot/thingsboard_long.parquet", "data/processed/iot_10min.parquet",
               "data/processed/store_manifest.json", "data/processed/iot_qc_report.csv"]
@@ -129,7 +132,8 @@ def store_once() -> set:
         log(f"{n} meter rows merged into the store")
     if not attempt(run, "update_store.py"):
         return {"store"}
-    return {name for name, ok in (("push", attempt(push_data_branch)), ("db", attempt(run, "publish_db.py"))) if not ok}
+    push = True if NO_PUSH.exists() else attempt(push_data_branch)
+    return {name for name, ok in (("push", push), ("db", attempt(run, "publish_db.py"))) if not ok}
 
 
 def retry_failed(failed: set) -> set:

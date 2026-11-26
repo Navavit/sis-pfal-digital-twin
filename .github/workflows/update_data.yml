@@ -1,11 +1,11 @@
 name: update-data
 
-# Pull new telemetry from ThingsBoard every 30 min and publish the store to the orphan branch `data`
+# Every 10 min: read the electricity meter (Tuya; scripts/meter_once.py), pull new telemetry from ThingsBoard and publish the store to the orphan branch `data`
 # (single commit, force-pushed -> the repository does not grow) and to the SIS PFAL SQL database (pfal_twin/dbstore.py).
 # The web app reads the database and falls back to the branch.
 on:
   schedule:
-    - cron: "*/30 * * * *"
+    - cron: "*/10 * * * *"      # GitHub starts scheduled runs late at busy times; the meter's kWh counter keeps the energy right
   workflow_dispatch:
 
 permissions:
@@ -34,6 +34,40 @@ jobs:
           git fetch origin data --depth=1 || exit 0
           git checkout origin/data -- data/raw/iot/thingsboard_long.parquet data/processed/iot_10min.parquet data/processed/store_manifest.json || true
           git reset -q
+
+      # The electricity meter, so no computer has to stay on. The Tuya token is kept between runs in the Actions cache,
+      # encrypted with the TUYA_BOX_KEY secret (the repository is public); a fresh login (scripts/tuya_login.py --github)
+      # arrives as the TUYA_TOKEN_SEED secret. A failed reading must not stop the sensor update.
+      - name: Restore the Tuya token
+        uses: actions/cache/restore@v4
+        with:
+          path: .tuya_box
+          key: tuya-token-${{ github.run_id }}
+          restore-keys: tuya-token-
+
+      - name: Read the electricity meter
+        id: meter
+        continue-on-error: true
+        env:
+          TUYA_BOX_KEY: ${{ secrets.TUYA_BOX_KEY }}
+          TUYA_TOKEN_SEED: ${{ secrets.TUYA_TOKEN_SEED }}
+          TUYA_USER_CODE: ${{ secrets.TUYA_USER_CODE }}
+          TUYA_DEVICE_ID: ${{ secrets.TUYA_DEVICE_ID }}
+        run: |
+          python scripts/token_box.py open
+          python scripts/meter_once.py
+
+      - name: Keep the (renewed) Tuya token
+        if: always()
+        env:
+          TUYA_BOX_KEY: ${{ secrets.TUYA_BOX_KEY }}
+        run: python scripts/token_box.py seal || true
+
+      - uses: actions/cache/save@v4
+        if: always() && hashFiles('.tuya_box/token.enc') != ''
+        with:
+          path: .tuya_box
+          key: tuya-token-${{ github.run_id }}-${{ github.run_attempt }}
 
       - name: Pull new telemetry and rebuild the 10-min table
         run: python scripts/update_store.py

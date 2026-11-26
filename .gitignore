@@ -35,3 +35,4 @@ docs/*
 .streamlit/tuya_token.json
 data/raw/meter/
 data/backup/
+.tuya_box/
