@@ -9,7 +9,8 @@ Every hour:   merge those readings into the raw store (thingsboard_long.parquet:
 If the database is down (server outage, the server move of Nov 2026), branch `data` and the local files still get
 everything, and the database catches up at the first hour it answers again (publish_db re-sends what it is missing).
 
-Runs under launchd (scripts/install_collector.sh); by hand:  .venv/bin/python scripts/collector.py [--once]
+Runs under launchd on a Mac (scripts/install_collector.sh) or systemd on Linux, e.g. a Raspberry Pi or a campus server
+(scripts/install_collector_linux.sh); by hand:  .venv/bin/python scripts/collector.py [--once]
 It keeps the Mac awake while it runs (caffeinate; keep the Mac on mains power with the lid open). If the Tuya login is
 lost anyway (the Mac off or asleep for more than ~2 h), it logs that and keeps trying with whatever token
 scripts/tuya_login.py saves next - scan the QR once more and it carries on by itself.
@@ -156,7 +157,8 @@ def main():
     # Keep the Mac awake while the collector runs: asleep, nothing renews the Tuya token (it lives 2 h) and the login is
     # lost. caffeinate -i (no idle sleep) -s (no system sleep on mains power) ends with this process. A closed lid on
     # battery still sleeps.
-    subprocess.Popen(["caffeinate", "-i", "-s", "-w", str(os.getpid())])
+    if sys.platform == "darwin":             # a Linux box (Raspberry Pi, server) does not sleep: nothing to do
+        subprocess.Popen(["caffeinate", "-i", "-s", "-w", str(os.getpid())])
     db = SqlApi.from_secrets(read_only=False)
     meter, next_store, next_meter, failed, next_retry = None, 0.0, 0.0, set(), 0.0
     while True:
