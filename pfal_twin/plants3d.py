@@ -27,15 +27,15 @@ STEM, BASE, TIP, FLOWER = 0.0, 0.3, 0.94, 1.0
 _ROSETTE = dict(form="rosette", shape="oval", petiole=0.0, lobes=0, lobe_depth=0.0, head=0.0, flowers=0)
 STYLES = {
     # ---- lettuces
-    "oak":       {**_ROSETTE, "n": 8, "L": 0.14, "w": 0.42, "tilt": 38, "droop": 0.35, "cup": 0.10, "ruffle": 0.20, "waves": 5,
+    "oak":       {**_ROSETTE, "n": 8, "L": 0.14, "w": 0.42, "tilt": 50, "droop": 0.35, "cup": 0.10, "ruffle": 0.20, "waves": 5,
                   "lobes": 4, "lobe_depth": 0.35, "colors": ("#b9d77a", "#b9d77a", "#5d9b35")},
-    "redoak":    {**_ROSETTE, "n": 8, "L": 0.13, "w": 0.42, "tilt": 38, "droop": 0.35, "cup": 0.10, "ruffle": 0.20, "waves": 5,
+    "redoak":    {**_ROSETTE, "n": 8, "L": 0.13, "w": 0.42, "tilt": 50, "droop": 0.35, "cup": 0.10, "ruffle": 0.20, "waves": 5,
                   "lobes": 4, "lobe_depth": 0.35, "colors": ("#a7c46a", "#a7c46a", "#7a2533")},
     "redcoral":  {**_ROSETTE, "n": 10, "L": 0.12, "w": 0.60, "tilt": 45, "droop": 0.25, "cup": 0.15, "ruffle": 0.45, "waves": 9,
                   "colors": ("#9fbf63", "#9fbf63", "#6e1f35")},
     "cos":       {**_ROSETTE, "n": 7, "L": 0.19, "w": 0.34, "tilt": 70, "droop": 0.10, "cup": 0.30, "ruffle": 0.03, "waves": 2,
                   "shape": "lance", "colors": ("#cfe39a", "#cfe39a", "#4f8f2f")},
-    "minicos":   {**_ROSETTE, "n": 7, "L": 0.15, "w": 0.34, "tilt": 68, "droop": 0.10, "cup": 0.30, "ruffle": 0.03, "waves": 2,
+    "minicos":   {**_ROSETTE, "n": 8, "L": 0.17, "w": 0.38, "tilt": 60, "droop": 0.10, "cup": 0.30, "ruffle": 0.03, "waves": 2,
                   "shape": "lance", "colors": ("#cfe39a", "#cfe39a", "#4f8f2f")},
     "redcos":    {**_ROSETTE, "n": 7, "L": 0.17, "w": 0.34, "tilt": 68, "droop": 0.10, "cup": 0.30, "ruffle": 0.04, "waves": 2,
                   "shape": "lance", "colors": ("#c7d98e", "#c7d98e", "#7b2a3a")},
@@ -263,6 +263,7 @@ def plant_table(rounds: pd.DataFrame, holes: pd.DataFrame, day=None, trays_per_t
     return pd.concat(out, ignore_index=True) if out else pd.DataFrame(columns=list(holes.columns) + ["crop", "round", "grow", "days_left", "harvest"])
 
 
+CANOPY = 1.25           # harvest-size plants ~30 cm across on holes 18 cm apart: neighbours overlap as on the real tiers
 MAX_VERTICES = 120_000   # ~5 MB in the browser; above it plants get fewer leaves (e.g. every hole planted with a herb)
 
 
@@ -292,7 +293,9 @@ def plant_traces(plants: pd.DataFrame, seed: int = 7) -> list:
         X, Y, Z, F, C, n = [], [], [], [], [], 0
         for r in g.itertuples():
             rng = np.random.default_rng(int(r.x * 1000) * 7919 + int(r.y * 1000) * 104729 + int(r.tier) + seed)
-            size = 0.3 + 0.7 * r.grow                        # a transplanted seedling is already ~1/3 of harvest size
+            # a transplanted seedling is already ~1/3 of harvest size; leaves spread fastest in the first half of the
+            # cycle, so the canopy covers the tray well before harvest (half-way: ~83 % of harvest size)
+            size = CANOPY * (0.3 + 0.7 * (1 - (1 - r.grow) ** 2))
             vx, vy, vz, f, c = plant_mesh(r.x, r.y, r.z, sty, size, rng)
             X.append(vx); Y.append(vy); Z.append(vz); F.append(f + n); C.append(c); n += len(vx)
         F = np.concatenate(F)
