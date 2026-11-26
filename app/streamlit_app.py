@@ -25,8 +25,8 @@ sys.path.insert(0, str(ROOT))
 # is already loaded (version mismatch), drop it and re-import.
 import os  # noqa: E402
 os.environ["PYTHONPATH"] = str(ROOT) + os.pathsep + os.environ.get("PYTHONPATH", "")
-NEEDS_PKG = "2026.11.24.2"
-APP_BUILD = "2026-11-24 b"          # shown in the footer so everyone can tell which version is running
+NEEDS_PKG = "2026.11.26.1"
+APP_BUILD = "2026-11-26 a"          # shown in the footer so everyone can tell which version is running
 import pfal_twin  # noqa: E402
 if getattr(pfal_twin, "__version__", "") != NEEDS_PKG:
     for _m in [m for m in sys.modules if m == "pfal_twin" or m.startswith("pfal_twin.")]:
@@ -444,7 +444,7 @@ def tray_map_html(grid: pd.DataFrame) -> str:
             if r.n == 0:
                 tds += f"<td style='{cell};background:#ffffff;color:#a19c90'>ว่าง</td>"
                 continue
-            left = "" if r.days_left is None else ("ถึงกำหนดเก็บ" if r.days_left <= 0 else f"อีก {r.days_left:.0f} วัน")
+            left = "" if r.days_left is None else ("ถึงกำหนดเก็บ" if r.days_left == 0 else f"เลยกำหนด {-r.days_left:.0f} วัน" if r.days_left < 0 else f"อีก {r.days_left:.0f} วัน")
             if left and "ไม่ทราบรอบ" in r["round"]:      # sowing round unknown: harvest date is an estimate
                 left = "≈ " + left
             if r.n > 1:

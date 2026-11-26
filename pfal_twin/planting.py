@@ -38,6 +38,10 @@ def load(url: str = CSV_URL, timeout: int = 20) -> pd.DataFrame:
     for c in INTS:
         df[c] = pd.to_numeric(df.get(c), errors="coerce").astype("Int64")
     df["transplanted"] = df["transplanted"].fillna(df["on_tray"])   # on_tray = in this position since; differs after a move between tiers
+    # A block stays on its trays until the sheet says it was harvested (or moved / discarded): when the planned harvest
+    # date passes without an actual one, it is still there (overdue), not gone.
+    overdue = df["harvest_actual"].isna() & df["off_tray"].notna() & (df["off_tray"] >= df["harvest_plan"])
+    df.loc[overdue, "off_tray"] = pd.Timestamp.max.normalize()
     df = df[df["crop"].notna() & df["tier"].isin(TIERS)]
     return df.reset_index(drop=True)
 
