@@ -26,7 +26,7 @@ sys.path.insert(0, str(ROOT))
 import os  # noqa: E402
 os.environ["PYTHONPATH"] = str(ROOT) + os.pathsep + os.environ.get("PYTHONPATH", "")
 NEEDS_PKG = "2026.11.26.2"
-APP_BUILD = "2026-11-26 b"          # shown in the footer so everyone can tell which version is running
+APP_BUILD = "2026-11-26 c"          # shown in the footer so everyone can tell which version is running
 import pfal_twin  # noqa: E402
 if getattr(pfal_twin, "__version__", "") != NEEDS_PKG:
     for _m in [m for m in sys.modules if m == "pfal_twin" or m.startswith("pfal_twin.")]:
@@ -283,7 +283,8 @@ def meter_history() -> pd.DataFrame:
     return tw.data.reindex(columns=list(cols)).rename(columns=cols).dropna(how="all")
 
 
-METER_STALE = pd.Timedelta("100min")   # readings reach the store every hour (+ the app's 10-min sync)
+METER_STALE = pd.Timedelta("100min")
+AC_STATUS_AGE = pd.Timedelta("3h")     # AC on/off in the twin from a reading up to this old (with its time), else unknown   # readings reach the store every hour (+ the app's 10-min sync)
 
 
 def electricity() -> dict | None:
@@ -379,17 +380,17 @@ def sustained_alerts(minutes: int = 60) -> list[str]:
 
 def add_ac_status(fig, at=None):
     """Mark the two AC indoor units in a 3-D twin figure from the electricity meter: green = running, grey = off,
-    amber = unknown (no meter reading in the last 30 min). Each unit is the main load of its phase (L1 right, L3 left)."""
+    amber = unknown (no meter reading in the last AC_STATUS_AGE). A reading older than 30 min is shown with its time.
+    Each unit is the main load of its phase (L1 right, L3 left)."""
     import plotly.graph_objects as go
     from pfal_twin import tuya_meter as TM
-    if at is None:                             # now: the latest reading, if it is recent
-        el = electricity()
-        known = el is not None and not el["stale"]
-        phase_w = {p: el["phases"][p] * 1000 for p in "ac"} if known else {}
-    else:                                      # a moment in the past (History cursor): the 10-min bin at or just before it
-        h = meter_history()
-        h = h[(h.index <= pd.Timestamp(at)) & (h.index > pd.Timestamp(at) - pd.Timedelta("30min"))].dropna(subset=["power"])
-        phase_w = {p: h[f"power_{p}"].iloc[-1] for p in "ac"} if len(h) else {}
+    # the latest reading at or before `at` (default now): readings reach the store hourly and the collector misses some
+    # while the Mac sleeps, so the newest one can be an hour or two old
+    at = pd.Timestamp(at) if at is not None else pd.Timestamp.now(tz=TZ)
+    h = meter_history()
+    h = h[(h.index <= at) & (h.index > at - AC_STATUS_AGE)].dropna(subset=["power"])
+    phase_w = {p: h[f"power_{p}"].iloc[-1] for p in "ac"} if len(h) else {}
+    when = f" (as of {h.index[-1]:%H:%M})" if len(h) and at - h.index[-1] > pd.Timedelta("30min") else ""
     status = TM.ac_status(phase_w)
     eq = tw.equipment_inside.set_index("name")
     xs, ys, zs, texts = [], [], [], []
@@ -397,11 +398,11 @@ def add_ac_status(fig, at=None):
         if a["name"] not in eq.index:
             continue
         r = eq.loc[a["name"]]
-        colour, label = (("#2e9d57", f"AC on · {a['kw']:.2f} kW") if a["on"] else      # the twin shows where it is: no left/right
-                         ("#9a958a", "AC off") if a["on"] is False else ("#d9a441", "AC status unknown"))
+        colour, label = (("#2e9d57", f"AC on · {a['kw']:.2f} kW{when}") if a["on"] else      # the twin shows where it is: no left/right
+                         ("#9a958a", f"AC off{when}") if a["on"] is False else ("#d9a441", "AC status unknown"))
         d = 0.04
         fig.add_trace(viz_box(r.x0 - d, r.x1 + d, r.y0 - d, r.y1 + d, r.z0 - d, r.z1 + d, colour, label, ph))
-        xs.append((r.x0 + r.x1) / 2); ys.append(r.y0 - 0.1); zs.append(r.z1 + 0.18); texts.append(label)
+        xs.append((r.x0 + r.x1) / 2); ys.append(r.y0 - 0.1); zs.append(r.z1 + 0.15 + 0.22 * len(xs)); texts.append(label)   # staggered: the units sit side by side
     if xs:
         fig.add_trace(go.Scatter3d(x=xs, y=ys, z=zs, mode="text", text=texts, textfont=dict(size=13, color="#22201c"),
                                    hoverinfo="skip", showlegend=False))
