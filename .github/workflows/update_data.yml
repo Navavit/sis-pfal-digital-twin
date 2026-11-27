@@ -1,15 +1,24 @@
 name: update-data
 
-# Every 10 min: read the electricity meter (Tuya; scripts/meter_once.py), pull new telemetry from ThingsBoard and publish the store to the orphan branch `data`
-# (single commit, force-pushed -> the repository does not grow) and to the SIS PFAL SQL database (pfal_twin/dbstore.py).
-# The web app reads the database and falls back to the branch.
+# The collector, so no computer has to stay on (scripts/actions_collector.py): one run reads the electricity meter every
+# 10 min and every 30 min pulls ThingsBoard telemetry, rebuilds the 10-min table and publishes it to the orphan branch
+# `data` (single commit, force-pushed -> the repository does not grow) and to the SIS PFAL SQL database. After ~5.5 h
+# it starts the next run itself, because GitHub runs schedules late or skips them at busy times; the schedule below only
+# restarts the chain if it ever breaks (a run that finds another one going waits in the queue, one at a time).
+# The Tuya token is kept between runs in the Actions cache, encrypted with the TUYA_BOX_KEY secret (the repository is
+# public); a fresh login (scripts/tuya_login.py --github) arrives as the TUYA_TOKEN_SEED secret.
 on:
   schedule:
-    - cron: "*/10 * * * *"      # GitHub starts scheduled runs late at busy times; the meter's kWh counter keeps the energy right
+    - cron: "17 */2 * * *"
   workflow_dispatch:
+    inputs:
+      minutes:
+        description: "how long this run collects (max ~340)"
+        default: "330"
 
 permissions:
   contents: write
+  actions: write
 
 concurrency:
   group: update-data
@@ -18,7 +27,7 @@ concurrency:
 jobs:
   update:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 355
     steps:
       - uses: actions/checkout@v4
 
@@ -29,15 +38,12 @@ jobs:
 
       - run: pip install -r requirements.txt
 
-      - name: Restore the current store from the data branch (incremental update)
+      - name: Restore the current store from the data branch
         run: |
           git fetch origin data --depth=1 || exit 0
           git checkout origin/data -- data/raw/iot/thingsboard_long.parquet data/processed/iot_10min.parquet data/processed/store_manifest.json || true
           git reset -q
 
-      # The electricity meter, so no computer has to stay on. The Tuya token is kept between runs in the Actions cache,
-      # encrypted with the TUYA_BOX_KEY secret (the repository is public); a fresh login (scripts/tuya_login.py --github)
-      # arrives as the TUYA_TOKEN_SEED secret. A failed reading must not stop the sensor update.
       - name: Restore the Tuya token
         uses: actions/cache/restore@v4
         with:
@@ -45,23 +51,22 @@ jobs:
           key: tuya-token-${{ github.run_id }}
           restore-keys: tuya-token-
 
-      - name: Read the electricity meter
-        id: meter
+      - name: Open the Tuya token
         continue-on-error: true
         env:
           TUYA_BOX_KEY: ${{ secrets.TUYA_BOX_KEY }}
           TUYA_TOKEN_SEED: ${{ secrets.TUYA_TOKEN_SEED }}
-          TUYA_USER_CODE: ${{ secrets.TUYA_USER_CODE }}
-          TUYA_DEVICE_ID: ${{ secrets.TUYA_DEVICE_ID }}
-        run: |
-          python scripts/token_box.py open
-          python scripts/meter_once.py
+        run: python scripts/token_box.py open
 
-      - name: Keep the (renewed) Tuya token
-        if: always()
+      - name: Collect (meter every 10 min, store every 30 min)
         env:
           TUYA_BOX_KEY: ${{ secrets.TUYA_BOX_KEY }}
-        run: python scripts/token_box.py seal || true
+          TUYA_USER_CODE: ${{ secrets.TUYA_USER_CODE }}
+          TUYA_DEVICE_ID: ${{ secrets.TUYA_DEVICE_ID }}
+          PFAL_DB_USER: ${{ secrets.PFAL_DB_USER }}
+          PFAL_DB_PASS: ${{ secrets.PFAL_DB_PASS }}
+          PUSH_URL: https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git
+        run: python scripts/actions_collector.py ${{ inputs.minutes || '330' }}
 
       - uses: actions/cache/save@v4
         if: always() && hashFiles('.tuya_box/token.enc') != ''
@@ -69,32 +74,8 @@ jobs:
           path: .tuya_box
           key: tuya-token-${{ github.run_id }}-${{ github.run_attempt }}
 
-      - name: Pull new telemetry and rebuild the 10-min table
-        run: python scripts/update_store.py
-
-      - name: Publish to the data branch
+      - name: Start the next run
+        if: always() && (inputs.minutes || '330') == '330'
         env:
-          TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          set -e
-          PUB=$(mktemp -d)
-          mkdir -p "$PUB/data/raw/iot" "$PUB/data/processed"
-          cp data/raw/iot/thingsboard_long.parquet "$PUB/data/raw/iot/"
-          cp data/processed/iot_10min.parquet data/processed/store_manifest.json data/processed/iot_qc_report.csv "$PUB/data/processed/"
-          cd "$PUB"
-          git init -q -b data
-          git config user.name "sis-pfal-bot"
-          git config user.email "actions@users.noreply.github.com"
-          git add -A
-          git commit -q -m "store $(date -u +'%Y-%m-%dT%H:%MZ')"
-          git push --force "https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}.git" data
-
-      # Primary store for the web app; the data branch above stays as the backup it falls back to. Since the outage of
-      # 12 Nov 2026 the SQL API refuses servers abroad (HTTP 500 at login): the collector on the team Mac publishes
-      # instead (scripts/collector.py), so a failure here must not mark the run as failed or send an e-mail.
-      - name: Publish to the SIS PFAL SQL database
-        continue-on-error: true
-        env:
-          PFAL_DB_USER: ${{ secrets.PFAL_DB_USER }}
-          PFAL_DB_PASS: ${{ secrets.PFAL_DB_PASS }}
-        run: python scripts/publish_db.py
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run update_data.yml --ref ${{ github.ref_name }}
