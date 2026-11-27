@@ -1,7 +1,7 @@
 name: update-data
 
 # The collector, so no computer has to stay on (scripts/actions_collector.py): one run reads the electricity meter every
-# 10 min and every 30 min pulls ThingsBoard telemetry, rebuilds the 10-min table and publishes it to the orphan branch
+# 10 min, then pulls ThingsBoard telemetry, rebuilds the 10-min table and publishes it to the orphan branch
 # `data` (single commit, force-pushed -> the repository does not grow) and to the SIS PFAL SQL database. After ~5.5 h
 # it starts the next run itself, because GitHub runs schedules late or skips them at busy times; the schedule below only
 # restarts the chain if it ever breaks (a run that finds another one going waits in the queue, one at a time).
@@ -58,7 +58,7 @@ jobs:
           TUYA_TOKEN_SEED: ${{ secrets.TUYA_TOKEN_SEED }}
         run: python scripts/token_box.py open
 
-      - name: Collect (meter every 10 min, store every 30 min)
+      - name: Collect (meter and store every 10 min)
         env:
           TUYA_BOX_KEY: ${{ secrets.TUYA_BOX_KEY }}
           TUYA_USER_CODE: ${{ secrets.TUYA_USER_CODE }}

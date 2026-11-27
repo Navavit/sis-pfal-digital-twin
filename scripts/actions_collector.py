@@ -2,8 +2,8 @@
 
 GitHub starts scheduled workflows late or not at all at busy times (a "*/10" schedule ran twice in 22 h on 26-27 Nov
 2026), so one run does the work itself for about 5.5 h and then starts the next run (workflow_dispatch):
-    every 10 min   read the electricity meter into the raw store (scripts/meter_once.py)
-    every 30 min   ThingsBoard -> 10-min table (update_store.py), push branch `data`, publish the database (publish_db.py)
+    every 10 min   read the electricity meter into the raw store (scripts/meter_once.py), then
+                   ThingsBoard -> 10-min table (update_store.py), push branch `data`, publish the database (publish_db.py)
 The Tuya token is sealed after every reading (scripts/token_box.py) and the workflow saves it to the cache at the end.
 
     python scripts/actions_collector.py [minutes]       (default 330; GitHub stops a job at 360)
@@ -17,7 +17,7 @@ import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-METER_EVERY, STORE_EVERY = 600, 1800
+METER_EVERY, STORE_EVERY = 600, 600       # the store step takes ~15 s: the web is at most ~10 min behind the meter
 DATA_FILES = ["data/raw/iot/thingsboard_long.parquet", "data/processed/iot_10min.parquet",
               "data/processed/store_manifest.json", "data/processed/iot_qc_report.csv"]
 
@@ -62,6 +62,8 @@ def main():
                 run("scripts/publish_db.py")          # the database refuses servers abroad for now: a failure is logged only
             next_store = now + STORE_EVERY
         time.sleep(max(5.0, min(next_meter, next_store, end) - time.time()))
+    if run("scripts/update_store.py"):            # the last readings, before the next run takes over
+        push()
 
 
 if __name__ == "__main__":
