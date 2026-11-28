@@ -277,7 +277,7 @@ def plant_meshes(_nonce: int, day: str) -> list:
 
 def meter_history() -> pd.DataFrame:
     """Electricity-meter columns of the store (pm.*, 10-min bins) - the meter is kept with the sensors: the collector
-    merges its readings into the raw store every hour (scripts/collector.py), so it reaches the database, branch `data`
+    merges its readings into the raw store every 10 min (GitHub Actions, scripts/actions_collector.py), so it reaches the database, branch `data`
     and this app the same way. Columns renamed to the meter's metric names (energy, power, power_a ...)."""
     cols = {f"pm.{m}": m for m in ("energy", "power", "power_a", "power_b", "power_c")}
     return tw.data.reindex(columns=list(cols)).rename(columns=cols).dropna(how="all")

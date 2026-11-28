@@ -16,7 +16,7 @@ Coverage when this page was last updated (17 Nov 2026): 2025-12-26 → 2026-11-1
 
 ## Electricity meter `pm`
 
-Read every 10 min by `scripts/collector.py` through the Tuya device-sharing API (`pfal_twin/tuya_meter.py`) and kept with the sensors: raw readings are device `pm` in the raw store (`thingsboard_long.parquet`, database `iot_long`), and the 10-min table has them as columns `pm.<metric>` (10-min means; database columns `pm_<metric>`). They reach the database and branch `data` every hour, from 17 Nov 2026.
+Read every 10 min by GitHub Actions (`scripts/actions_collector.py` → `scripts/meter_once.py`) through the Tuya device-sharing API (`pfal_twin/tuya_meter.py`) and kept with the sensors: raw readings are device `pm` in the raw store (`thingsboard_long.parquet`, database `iot_long`), and the 10-min table has them as columns `pm.<metric>` (10-min means; database columns `pm_<metric>`). They reach the database and branch `data` every hour, from 17 Nov 2026.
 
 | metric | meaning |
 |---|---|

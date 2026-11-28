@@ -210,7 +210,7 @@ def fetch_history(client: Client, start, end=None, devices: dict = DEVICES, keys
 
 def update_store(client: Client, path: Path = LONG_PARQUET, backfill_from="2025-11-01", overlap_days: int = 1, **kw) -> pd.DataFrame:
     """Incremental download: append everything newer than what is already in `path`. The store also holds samples of
-    devices that are not in ThingsBoard (the electricity meter `pm`, added by scripts/collector.py): they are kept, and
+    devices that are not in ThingsBoard (the electricity meter `pm`, added by scripts/meter_once.py): they are kept, and
     the start is taken from the ThingsBoard devices only."""
     old = load_long(path) if path.exists() else None
     tb_old = old[old["device"].isin(DEVICES)] if old is not None else None
